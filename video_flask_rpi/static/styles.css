@@ -634,3 +634,255 @@ button:hover {
     display: none;
   }
 }
+
+/* Light YouTube-like rework */
+:root {
+  --yt-bg: #f8f8f8;
+  --yt-surface: #ffffff;
+  --yt-border: #e5e5e5;
+  --yt-text: #0f0f0f;
+  --yt-muted: #606060;
+  --yt-red: #ff0000;
+}
+
+body {
+  background: linear-gradient(180deg, #fbfbfb, #f4f4f4 50%, #f7f7f7) !important;
+  color: var(--yt-text) !important;
+}
+
+.brand,
+.top-actions,
+.tree-panel,
+.content-top,
+.content-bottom,
+.reco-panel {
+  background: var(--yt-surface) !important;
+  border: 1px solid var(--yt-border) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.03);
+}
+
+.brand h1 { color: var(--yt-text); }
+.brand p { color: var(--yt-muted); }
+
+input[type="search"] {
+  background: #fff !important;
+  border: 1px solid #d9d9d9 !important;
+  color: var(--yt-text) !important;
+}
+
+button {
+  background: #f2f2f2 !important;
+  border: 1px solid #d8d8d8 !important;
+  color: var(--yt-text) !important;
+}
+
+button:hover {
+  background: #e9e9e9 !important;
+  border-color: #cfcfcf !important;
+}
+
+.pending-badge {
+  background: linear-gradient(180deg, #ffeded, #ffdede) !important;
+  border-color: #ffb6b6 !important;
+  color: #8d1c1c !important;
+}
+
+.filter-btn {
+  background: #f2f2f2 !important;
+  border-color: #dfdfdf !important;
+}
+
+.filter-btn.active {
+  background: #0f0f0f !important;
+  color: #fff !important;
+  border-color: #0f0f0f !important;
+}
+
+.recursive-opt,
+.panel-title,
+.folder-count,
+.video-path,
+.counter,
+.status-line,
+.meta {
+  color: var(--yt-muted) !important;
+}
+
+.explorer {
+  grid-template-columns: 290px 1fr !important;
+}
+
+.content-panel {
+  grid-template-rows: auto 1fr 46% !important;
+}
+
+.reco-panel {
+  border-radius: 14px;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.reco-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.reco-head p {
+  margin: 0.1rem 0 0;
+  color: var(--yt-muted);
+  font-size: 0.8rem;
+}
+
+.reco-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.reco-card {
+  border: 1px solid #e4e4e4;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff !important;
+  color: #111 !important;
+  padding: 0;
+  display: grid;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reco-card img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  background: #ddd;
+}
+
+.reco-card.hero img {
+  height: 180px;
+}
+
+.reco-card .reco-body {
+  padding: 0.55rem 0.65rem 0.65rem;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.reco-kicker {
+  font-size: 0.68rem;
+  color: #b00000;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.reco-card strong {
+  font-size: 0.86rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reco-card small {
+  color: var(--yt-muted);
+  font-size: 0.75rem;
+}
+
+.reco-card.empty {
+  align-content: center;
+  padding: 0.7rem;
+}
+
+.table-head {
+  color: #6a6a6a !important;
+  border-bottom: 1px solid #ececec !important;
+}
+
+.video-row {
+  border: 1px solid transparent !important;
+}
+
+.video-row:hover {
+  background: #f6f6f6 !important;
+}
+
+.video-row.active {
+  background: #f0f7ff !important;
+  border-color: #cfe6ff !important;
+}
+
+.video-name { color: #0f0f0f !important; }
+
+.chip {
+  border-color: #d9d9d9 !important;
+  background: #fafafa !important;
+  color: #4a4a4a !important;
+}
+
+.chip.on {
+  border-color: #bcc8d8 !important;
+  background: #eaf2ff !important;
+  color: #294f85 !important;
+}
+
+.chip.hash-ok {
+  border-color: #abd8bc !important;
+  background: #ebfff2 !important;
+  color: #236642 !important;
+}
+
+.chip.hash-miss {
+  border-color: #f0b9b9 !important;
+  background: #fff0f0 !important;
+  color: #8f3838 !important;
+}
+
+#videoPlayer {
+  border-color: #d9d9d9 !important;
+}
+
+.state-btn.active {
+  background: #ffeded !important;
+  border-color: #ffc1c1 !important;
+  color: #831616 !important;
+}
+
+.fs-overlay {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid #e1e1e1 !important;
+}
+
+.fs-time,
+.fs-vol {
+  color: #333 !important;
+}
+
+.log-dialog,
+.privacy-dialog {
+  background: #fff !important;
+  border-color: #e3e3e3 !important;
+}
+
+.log-content,
+.log-edit,
+.privacy-dialog input {
+  background: #fff !important;
+  color: #1a1a1a !important;
+  border-color: #dedede !important;
+}
+
+@media (max-width: 980px) {
+  .reco-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reco-card img,
+  .reco-card.hero img {
+    height: 160px;
+  }
+
+  .content-panel {
+    grid-template-rows: auto auto auto !important;
+  }
+}

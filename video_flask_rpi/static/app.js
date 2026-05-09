@@ -17,6 +17,7 @@ const filterHeavy = document.getElementById("filterHeavy");
 const folderTree = document.getElementById("folderTree");
 const videoTable = document.getElementById("videoTable");
 const countBadge = document.getElementById("countBadge");
+const recoGrid = document.getElementById("recoGrid");
 
 const videoPlayer = document.getElementById("videoPlayer");
 const playerBox = document.querySelector(".player-box");
@@ -239,7 +240,7 @@ function renderFolders() {
 
     const name = document.createElement("span");
     name.className = "folder-name";
-    name.textContent = folder.depth === 0 ? `📁 ${folder.name}` : folder.name;
+    name.textContent = folder.depth === 0 ? `🏠 Inicio` : `📺 ${folder.name}`;
 
     const count = document.createElement("span");
     count.className = "folder-count";
@@ -264,11 +265,69 @@ function renderFolders() {
   folderTree.appendChild(frag);
 }
 
+function selectAndPlay(video) {
+  if (!video) return;
+  selectedVideo = video;
+  renderVideos();
+  updateSelectionUi();
+  playSelected();
+}
+
+function topVideosBy(metric, limit = 1, source = allVideos) {
+  const sorted = [...(source || [])].sort((a, b) => Number(b[metric] || 0) - Number(a[metric] || 0));
+  return sorted.slice(0, Math.max(0, limit));
+}
+
+function renderRecommendations() {
+  if (!recoGrid) return;
+  recoGrid.innerHTML = "";
+
+  const favorites = allVideos.filter((v) => v.favorite);
+  const unseen = allVideos.filter((v) => !v.watched);
+  const mostViewed = topVideosBy("views", 1)[0] || null;
+  const topFavorite = topVideosBy("views", 1, favorites)[0] || favorites[0] || null;
+  const forYouPool = unseen.length ? unseen : allVideos;
+  const forYou = forYouPool.length ? forYouPool[Math.floor(Math.random() * forYouPool.length)] : null;
+
+  const picks = [
+    { title: "Para ti", subtitle: "Basado en videos sin revisar", video: forYou, cls: "reco-card hero" },
+    { title: "Mas vistos", subtitle: "Tu tendencia local", video: mostViewed, cls: "reco-card" },
+    { title: "Favoritos", subtitle: "Top de tu biblioteca", video: topFavorite, cls: "reco-card" },
+  ];
+
+  picks.forEach((pick) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = pick.cls;
+
+    if (!pick.video) {
+      card.classList.add("empty");
+      card.innerHTML = `<span class="reco-kicker">${pick.title}</span><strong>Sin videos disponibles</strong><small>${pick.subtitle}</small>`;
+      card.disabled = true;
+      recoGrid.appendChild(card);
+      return;
+    }
+
+    const thumb = pick.video.thumbnail_url || `/api/thumb/video?path=${encodeURIComponent(pick.video.relative_path)}`;
+    card.innerHTML = `
+      <img src="${thumb}" alt="thumb" />
+      <div class="reco-body">
+        <span class="reco-kicker">${pick.title}</span>
+        <strong>${pick.video.name}</strong>
+        <small>${pick.subtitle} · ${pick.video.views || 0} vistas</small>
+      </div>
+    `;
+    card.addEventListener("click", () => selectAndPlay(pick.video));
+    recoGrid.appendChild(card);
+  });
+}
+
 function renderVideos() {
   videoTable.innerHTML = "";
   const filtered = applyFilter(allVideos);
   filteredVideos = filtered;
   countBadge.textContent = String(filtered.length);
+  renderRecommendations();
 
   if (!filtered.length) {
     const empty = document.createElement("div");

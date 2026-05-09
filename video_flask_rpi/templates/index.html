@@ -11,10 +11,10 @@
     <header class="topbar">
       <div class="brand">
         <h1>ABREARCH TUBE</h1>
-        <p>Estilo YouTube en tu biblioteca local</p>
+        <p>Inicio de videos local estilo YouTube</p>
       </div>
       <div class="top-actions">
-        <input id="searchInput" type="search" placeholder="Buscar en carpeta actual..." />
+        <input id="searchInput" type="search" placeholder="Buscar en el canal actual..." />
         <span id="pendingBadge" class="pending-badge" title="Operaciones diferidas pendientes">Pendientes: 0</span>
         <button id="privacyBtn">Privacidad</button>
         <button id="refreshBtn">Refrescar</button>
@@ -39,11 +39,19 @@
 
     <section class="explorer">
       <aside class="tree-panel">
-        <div class="panel-title">Carpetas</div>
+        <div class="panel-title">Canales</div>
         <div id="folderTree" class="folder-tree"></div>
       </aside>
 
       <section class="content-panel">
+        <section class="reco-panel">
+          <div class="reco-head">
+            <h3>Recomendados</h3>
+            <p>Inspirados en tu historial local</p>
+          </div>
+          <div id="recoGrid" class="reco-grid"></div>
+        </section>
+
         <div class="content-top">
           <div class="table-head">
             <span>Nombre</span>
