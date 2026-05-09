@@ -3462,6 +3462,7 @@ class VideoBrowserApp(QMainWindow):
         self._reco_top_cursor = 0
         self._reco_top_chunk_size = 18
         self._reco_thumb_cache = {}
+        self._reco_stats_map = {}
         self._reco_loading_chunk = False
         self.duration_cache = {}
         self.idle_hash_queue = []
@@ -7967,15 +7968,15 @@ class VideoBrowserApp(QMainWindow):
         top_pool = [v for v in pool if v.name.lower().startswith("top ")]
         top_pool.sort(
             key=lambda v: (
-                full_stats.get(str(v).replace('\\', '/'), {}).get('reproducciones', 0),
+                -int(full_stats.get(str(v).replace('\\', '/'), {}).get('reproducciones', 0)),
                 v.name.lower(),
-            ),
-            reverse=True,
+            )
         )
 
         self._reco_top_pool = top_pool
         self._reco_top_cursor = 0
         self._reco_thumb_cache = dict(thumbs_map or {})
+        self._reco_stats_map = dict(full_stats or {})
         self.reco_list.clear()
         self._append_reco_top_chunk()
 
@@ -8003,10 +8004,13 @@ class VideoBrowserApp(QMainWindow):
             self.reco_list.blockSignals(True)
             icon_size = self.reco_list.iconSize()
             for v in chunk:
+                repros = int(
+                    self._reco_stats_map.get(str(v).replace('\\', '/'), {}).get('reproducciones', 0)
+                )
                 item = QListWidgetItem()
                 item.setData(Qt.ItemDataRole.UserRole, str(v))
                 item.setIcon(self._make_thumb_icon_for_video(v, self._reco_thumb_cache, icon_size))
-                item.setText(v.stem[:26])
+                item.setText(f"{v.stem[:20]}\n{repros} vistas")
                 item.setToolTip(str(v))
                 self.reco_list.addItem(item)
             self.reco_list.blockSignals(False)
