@@ -3749,26 +3749,6 @@ class VideoBrowserApp(QMainWindow):
                 background: #fff8f8;
             }
 
-            QListWidget#channelsList {
-                background: #ffffff;
-                border: 1px solid #e5e5e5;
-                border-radius: 12px;
-                padding: 4px;
-            }
-            QListWidget#channelsList::item {
-                border-radius: 8px;
-                padding: 7px 8px;
-                margin: 1px 1px;
-            }
-            QListWidget#channelsList::item:hover {
-                background: #f2f2f2;
-            }
-            QListWidget#channelsList::item:selected {
-                background: #ffeceb;
-                color: #8b1010;
-                font-weight: 600;
-            }
-
             /* ── Checkboxes ── */
             QCheckBox {
                 color: #0f0f0f;
@@ -4144,21 +4124,6 @@ class VideoBrowserApp(QMainWindow):
         # -- splitter: árbol + contenido --
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        left_panel = QWidget()
-        left_col = QVBoxLayout(left_panel)
-        left_col.setContentsMargins(0, 0, 0, 0)
-        left_col.setSpacing(4)
-
-        self.lbl_channels = QLabel("Canales (Carpetas)")
-        self.lbl_channels.setObjectName("detail")
-        left_col.addWidget(self.lbl_channels)
-
-        self.channels_list = QListWidget()
-        self.channels_list.setObjectName("channelsList")
-        self.channels_list.setMinimumHeight(170)
-        self.channels_list.itemClicked.connect(self._on_channel_item_clicked)
-        left_col.addWidget(self.channels_list)
-
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["", "Carpeta", "Vistas", "Tiempo", "Peso", "% Rev", "% Hash", "Mini"])
         self.tree.setIndentation(16)
@@ -4173,8 +4138,7 @@ class VideoBrowserApp(QMainWindow):
         self.tree.itemDoubleClicked.connect(self._on_tree_double_click)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._tree_context_menu)
-        left_col.addWidget(self.tree, 1)
-        splitter.addWidget(left_panel)
+        splitter.addWidget(self.tree)
 
         right = QWidget()
         rcol = QVBoxLayout(right)
@@ -4215,8 +4179,10 @@ class VideoBrowserApp(QMainWindow):
         self.reco_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.reco_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.reco_list.setIconSize(QSize(172, 96))
-        self.reco_list.setGridSize(QSize(190, 134))
-        self.reco_list.setMaximumHeight(150)
+        self.reco_list.setGridSize(QSize(204, 156))
+        self.reco_list.setWordWrap(True)
+        self.reco_list.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.reco_list.setMaximumHeight(182)
         self.reco_list.itemClicked.connect(self._on_reco_item_clicked)
         self.reco_list.horizontalScrollBar().valueChanged.connect(self._on_reco_scroll_changed)
         reco_layout.addWidget(self.reco_list)
@@ -6625,7 +6591,6 @@ class VideoBrowserApp(QMainWindow):
         self._cancel_tree_build()
         self.tree.clear()
         if not self.ruta_raiz:
-            self._refresh_channels_list()
             return
         root_has_dups = self._folder_has_duplicates(self.ruta_raiz)
         root_text = self.ruta_raiz.name + (" !" if root_has_dups else "")
@@ -6640,109 +6605,12 @@ class VideoBrowserApp(QMainWindow):
         self.tree.collapseAll()
         root.setExpanded(True)
         self.tree.setCurrentItem(root)
-        self._refresh_channels_list()
         self._tree_build_nodes = 1
         self._tree_build_queue.append((root, self.ruta_raiz, None, 0))
         self.statusBar().showMessage("Cargando estructura...", 0)
         self._process_tree_build_chunk()
         if self._tree_build_queue and self._tree_build_timer:
             self._tree_build_timer.start()
-
-    def _iter_tree_items(self):
-        if not hasattr(self, "tree"):
-            return
-        for i in range(self.tree.topLevelItemCount()):
-            stack = [self.tree.topLevelItem(i)]
-            while stack:
-                node = stack.pop()
-                if node is None:
-                    continue
-                yield node
-                for j in range(node.childCount() - 1, -1, -1):
-                    stack.append(node.child(j))
-
-    def _select_tree_item_by_path(self, folder_path: Path):
-        if not folder_path:
-            return False
-        tgt = str(folder_path).replace('\\', '/').rstrip('/')
-        for node in self._iter_tree_items() or []:
-            ruta = node.data(0, Qt.ItemDataRole.UserRole)
-            if not ruta:
-                continue
-            if str(ruta).replace('\\', '/').rstrip('/') == tgt:
-                self.tree.setCurrentItem(node)
-                self.tree.scrollToItem(node)
-                return True
-        return False
-
-    def _refresh_channels_list(self):
-        if not hasattr(self, "channels_list"):
-            return
-        self.channels_list.blockSignals(True)
-        self.channels_list.clear()
-        if not self.ruta_raiz:
-            self.channels_list.blockSignals(False)
-            return
-
-        root_norm = str(self.ruta_raiz).replace('\\', '/').rstrip('/')
-        candidates = []
-        for key, agg in (self.folder_agg_cache or {}).items():
-            norm = str(key).replace('\\', '/').rstrip('/')
-            if not norm.startswith(root_norm):
-                continue
-            p = Path(norm)
-            if not p.exists() or not p.is_dir():
-                continue
-            candidates.append((p, int(agg.get('total_vistas', 0))))
-
-        candidates.sort(key=lambda x: str(x[0]).lower())
-        for p, vistas in candidates:
-            if p == self.ruta_raiz:
-                label = f"🏠 {p.name}"
-            else:
-                try:
-                    rel = str(p.relative_to(self.ruta_raiz)).replace('\\', '/')
-                except Exception:
-                    rel = p.name
-                label = f"{rel}  ·  {vistas} vistas"
-            it = QListWidgetItem(label)
-            it.setData(Qt.ItemDataRole.UserRole, str(p))
-            it.setToolTip(str(p))
-            self.channels_list.addItem(it)
-
-        self.channels_list.blockSignals(False)
-        self._sync_channels_selection()
-
-    def _sync_channels_selection(self):
-        if not hasattr(self, "channels_list") or not self.carpeta_actual:
-            return
-        target = str(self.carpeta_actual).replace('\\', '/').rstrip('/')
-        self.channels_list.blockSignals(True)
-        for i in range(self.channels_list.count()):
-            it = self.channels_list.item(i)
-            p = str(it.data(Qt.ItemDataRole.UserRole) or "").replace('\\', '/').rstrip('/')
-            if p == target:
-                self.channels_list.setCurrentRow(i)
-                self.channels_list.scrollToItem(it)
-                break
-        self.channels_list.blockSignals(False)
-
-    def _on_channel_item_clicked(self, item: QListWidgetItem):
-        if not item:
-            return
-        ruta = item.data(Qt.ItemDataRole.UserRole)
-        if not ruta:
-            return
-        p = Path(ruta)
-        if not p.exists():
-            self._notify("La carpeta ya no existe", 1700)
-            self._refresh_channels_list()
-            return
-        if not self._select_tree_item_by_path(p):
-            self.carpeta_actual = p
-            self._start_folder_view_log(self.carpeta_actual)
-            self._refresh_list()
-        self._notify(f"Canal: {p.name}", 1200)
 
     def _set_folder_stats(self, item, carpeta):
         # Usa solo la cache pre-agregada (construida una vez en _scan); evita
@@ -6827,7 +6695,6 @@ class VideoBrowserApp(QMainWindow):
             self.carpeta_actual = Path(ruta)
             self._start_folder_view_log(self.carpeta_actual)
             self._refresh_list()
-            self._sync_channels_selection()
 
     def _on_tree_double_click(self, item, _column):
         ruta = item.data(0, Qt.ItemDataRole.UserRole)
@@ -8158,7 +8025,8 @@ class VideoBrowserApp(QMainWindow):
                 item = QListWidgetItem()
                 item.setData(Qt.ItemDataRole.UserRole, str(v))
                 item.setIcon(self._make_thumb_icon_for_video(v, self._reco_thumb_cache, icon_size))
-                item.setText(f"{v.stem[:20]}\n{repros} vistas")
+                item.setText(f"{v.name[:34]}\n{repros} vistas")
+                item.setSizeHint(QSize(198, 148))
                 item.setToolTip(str(v))
                 self.reco_list.addItem(item)
             self.reco_list.blockSignals(False)
