@@ -28,6 +28,8 @@ const deleteBtn = document.getElementById("deleteBtn");
 const logModal = document.getElementById("logModal");
 const logContent = document.getElementById("logContent");
 const closeLogBtn = document.getElementById("closeLogBtn");
+const saveLogBtn = document.getElementById("saveLogBtn");
+const logFileName = document.getElementById("logFileName");
 
 let folders = [];
 let allVideos = [];
@@ -53,6 +55,19 @@ async function apiPost(url) {
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function apiPostJson(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail || `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -319,15 +334,22 @@ function setFilter(filter) {
 
 async function openLogModal() {
   logModal.classList.remove("hidden");
-  logContent.textContent = "Cargando log...";
+  logContent.value = "Cargando log diario...";
+  logFileName.textContent = "-";
   try {
-    const response = await fetch("/api/log?lines=350");
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const text = await response.text();
-    logContent.textContent = text || "Log vacio";
+    const data = await apiGet("/api/log/folder-views/today");
+    logFileName.textContent = data.file_name || "folder_views";
+    logContent.value = data.content || "";
   } catch (err) {
-    logContent.textContent = `Error cargando log: ${err.message || err}`;
+    logContent.value = `Error cargando log: ${err.message || err}`;
   }
+}
+
+async function saveLogModal() {
+  const content = logContent.value || "";
+  const data = await apiPostJson("/api/log/folder-views/today", { content });
+  logFileName.textContent = data.file_name || logFileName.textContent;
+  setStatus("Log diario guardado.");
 }
 
 function closeLogModal() {
@@ -368,6 +390,7 @@ deleteBtn.addEventListener("click", () => queueDeleteSelected().catch(showError)
 videoPlayer.addEventListener("ended", () => markViewedOnEnd().catch(() => {}));
 
 logBtn.addEventListener("click", () => openLogModal().catch(showError));
+saveLogBtn.addEventListener("click", () => saveLogModal().catch(showError));
 closeLogBtn.addEventListener("click", () => closeLogModal());
 logModal.addEventListener("click", (event) => {
   if (event.target === logModal) closeLogModal();

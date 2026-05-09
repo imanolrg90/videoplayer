@@ -77,10 +77,17 @@
   <div id="logModal" class="log-modal hidden">
     <div class="log-dialog">
       <div class="log-header">
-        <h3>Log del programa</h3>
-        <button id="closeLogBtn">Cerrar</button>
+        <h3>Log diario de carpetas</h3>
+        <div class="log-actions">
+          <button id="saveLogBtn">Guardar</button>
+          <button id="closeLogBtn">Cerrar</button>
+        </div>
       </div>
-      <pre id="logContent" class="log-content"></pre>
+      <div class="log-file-row">
+        <span>Archivo:</span>
+        <strong id="logFileName">-</strong>
+      </div>
+      <textarea id="logContent" class="log-content log-edit" spellcheck="false"></textarea>
     </div>
   </div>
 

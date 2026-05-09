@@ -21,6 +21,8 @@ VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".wmv"}
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "/mnt/media_share")).resolve()
 DESKTOP_DB_PATH = Path(os.getenv("DESKTOP_DB_PATH", "./videos.db")).resolve()
 APP_LOG_PATH = Path(os.getenv("APP_LOG_PATH", "./LOG/abrearch_premium.log")).resolve()
+FOLDER_VIEWS_LOG_DIR = Path(os.getenv("FOLDER_VIEWS_LOG_DIR", str(APP_LOG_PATH.parent))).resolve()
+FOLDER_VIEWS_LOG_BASENAME = os.getenv("FOLDER_VIEWS_LOG_BASENAME", "folder_views").strip() or "folder_views"
 THUMB_CACHE_DIR = (Path(__file__).resolve().parent / "thumb_cache").resolve()
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "/usr/bin/ffmpeg").strip()
 APP_USERNAME = os.getenv("APP_USERNAME", "admin")
@@ -458,6 +460,12 @@ def parse_range_header(range_header: str, file_size: int) -> tuple[int, int] | N
     return start, end
 
 
+def folder_views_today_path() -> Path:
+    fecha = datetime.now().strftime("%Y-%m-%d")
+    filename = f"{FOLDER_VIEWS_LOG_BASENAME}_{fecha}.log"
+    return FOLDER_VIEWS_LOG_DIR / filename
+
+
 @app.get("/")
 def index():
     if not session.get("logged_in"):
@@ -707,6 +715,49 @@ def log_api():
     all_lines = text.splitlines()
     tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
     return Response("\n".join(tail), mimetype="text/plain")
+
+
+@app.get("/api/log/folder-views/today")
+@auth_required
+def folder_views_today_api():
+    path = folder_views_today_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_text("", encoding="utf-8")
+
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        return jsonify({"detail": f"No se pudo leer el log diario: {exc}"}), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            "file_name": path.name,
+            "file_path": str(path),
+            "content": text,
+        }
+    )
+
+
+@app.post("/api/log/folder-views/today")
+@auth_required
+def save_folder_views_today_api():
+    path = folder_views_today_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    data = request.get_json(silent=True) or {}
+    content = data.get("content", "")
+    if not isinstance(content, str):
+        return jsonify({"detail": "content debe ser texto"}), 400
+
+    try:
+        path.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        return jsonify({"detail": f"No se pudo guardar el log diario: {exc}"}), 500
+
+    LOGGER.info("API /log/folder-views/today saved file=%s bytes=%d", path.name, len(content.encode("utf-8")))
+    return jsonify({"ok": True, "file_name": path.name, "file_path": str(path)})
 
 
 if __name__ == "__main__":
