@@ -452,32 +452,69 @@ def ensure_thumbnail(video_path: Path) -> Path | None:
     if out.exists() and out.stat().st_size > 0:
         return out
 
-    cmd = [
-        FFMPEG_PATH,
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-ss",
-        "00:00:02",
-        "-i",
-        str(video_path),
-        "-frames:v",
-        "1",
-        "-vf",
-        "scale=320:-1",
-        "-y",
-        str(out),
-    ]
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, timeout=20)
-        if result.returncode != 0:
+    def _video_duration_seconds(path: Path) -> float | None:
+        ffmpeg_bin = Path(FFMPEG_PATH)
+        suffix = ffmpeg_bin.suffix or ""
+        ffprobe_bin = ffmpeg_bin.with_name(f"ffprobe{suffix}")
+        if not ffprobe_bin.exists():
+            ffprobe_bin = Path("ffprobe")
+        cmd = [
+            str(ffprobe_bin),
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ]
+        try:
+            res = subprocess.run(cmd, capture_output=True, timeout=10)
+            if res.returncode != 0:
+                return None
+            txt = (res.stdout or b"").decode("utf-8", errors="ignore").strip()
+            dur = float(txt)
+            if dur > 0:
+                return dur
+        except Exception:
             return None
-    except Exception:
         return None
 
-    if out.exists() and out.stat().st_size > 0:
-        return out
+    duration = _video_duration_seconds(video_path)
+    if duration and duration > 0.8:
+        probes = []
+        for ratio in (0.2, 0.35, 0.5, 0.7, 0.85):
+            t = max(0.4, float(duration) * ratio)
+            if t < max(0.45, duration - 0.05):
+                probes.append(t)
+        seek_points = probes or [max(0.4, duration * 0.5)]
+    else:
+        # Fallback for unknown duration: avoid first frame with delayed seeks.
+        seek_points = [2.0, 4.0, 6.0]
+
+    for t in seek_points:
+        cmd = [
+            FFMPEG_PATH,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(video_path),
+            "-ss",
+            f"{float(t):.3f}",
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=320:-1",
+            "-y",
+            str(out),
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=20)
+            if result.returncode == 0 and out.exists() and out.stat().st_size > 0:
+                return out
+        except Exception:
+            continue
     return None
 
 
