@@ -456,13 +456,22 @@ async function updateSelectedState(payload) {
   await refreshPendingSummary();
 }
 
-async function markViewedOnEnd() {
-  if (!selectedVideo || selectedVideo.watched) return;
-  const q = new URLSearchParams({ path: selectedVideo.relative_path });
+async function markViewedOnEnd(relativePath) {
+  const targetPath = String(relativePath || "").trim();
+  if (!targetPath) return;
+
+  const match = allVideos.find((v) => v.relative_path === targetPath);
+  if (match && match.watched) return;
+
+  const q = new URLSearchParams({ path: targetPath });
   const data = await apiPost(`/api/video/viewed?${q.toString()}`);
-  Object.assign(selectedVideo, data.state);
-  const match = allVideos.find((v) => v.relative_path === selectedVideo.relative_path);
-  if (match) Object.assign(match, selectedVideo);
+
+  const state = data.state || {};
+  if (match) Object.assign(match, state);
+  if (selectedVideo && selectedVideo.relative_path === targetPath) {
+    Object.assign(selectedVideo, state);
+  }
+
   renderVideos();
   updateSelectionUi();
   setStatus("Marcado como visto y en cola para RWD.");
@@ -602,8 +611,9 @@ document.addEventListener("fullscreenchange", () => {
   syncFullscreenOverlay();
 });
 
-videoPlayer.addEventListener("ended", () => {
-  markViewedOnEnd().catch(() => {});
+videoPlayer.addEventListener("ended", async () => {
+  const finishedPath = selectedVideo ? selectedVideo.relative_path : "";
+  await markViewedOnEnd(finishedPath).catch(() => {});
   if (repeatEnabled) {
     playSelected();
     return;
