@@ -37,13 +37,31 @@
       </label>
     </section>
 
-    <section class="explorer">
+    <section id="explorer" class="explorer">
       <aside class="tree-panel">
-        <div class="panel-title">Canales</div>
+        <div class="panel-title">
+          <span>Canales</span>
+          <button id="toggleChannelsBtn" class="mini-btn" type="button" title="Colapsar canales">☰</button>
+        </div>
         <div id="folderTree" class="folder-tree"></div>
       </aside>
 
       <section class="content-panel">
+        <section class="topics-panel">
+          <div class="topics-head">
+            <h3>Categorias</h3>
+          </div>
+          <div id="topicsChips" class="topics-chips"></div>
+        </section>
+
+        <section class="shorts-panel">
+          <div class="shorts-head">
+            <h3>Shorts de tu biblioteca</h3>
+            <p>Descubrimiento rapido</p>
+          </div>
+          <div id="shortsRail" class="shorts-rail"></div>
+        </section>
+
         <section class="reco-panel">
           <div class="reco-head">
             <h3>Recomendados</h3>

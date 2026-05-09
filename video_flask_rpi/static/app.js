@@ -18,6 +18,10 @@ const folderTree = document.getElementById("folderTree");
 const videoTable = document.getElementById("videoTable");
 const countBadge = document.getElementById("countBadge");
 const recoGrid = document.getElementById("recoGrid");
+const topicsChips = document.getElementById("topicsChips");
+const shortsRail = document.getElementById("shortsRail");
+const toggleChannelsBtn = document.getElementById("toggleChannelsBtn");
+const explorer = document.getElementById("explorer");
 
 const videoPlayer = document.getElementById("videoPlayer");
 const playerBox = document.querySelector(".player-box");
@@ -62,6 +66,7 @@ let filteredVideos = [];
 let repeatEnabled = false;
 let privacyLocked = false;
 let fsHideTimer = null;
+let selectedTopic = "all";
 
 function formatTime(value) {
   const sec = Math.max(0, Math.floor(Number(value || 0)));
@@ -198,6 +203,13 @@ async function refreshPendingSummary() {
 
 function applyFilter(videos) {
   let output = [...videos];
+  if (selectedTopic !== "all") {
+    output = output.filter((v) => {
+      const folder = String(v.folder || "").replace(/\\/g, "/");
+      const root = folder.split("/")[0] || "root";
+      return root === selectedTopic;
+    });
+  }
   if (currentFilter === "fav") output = output.filter((v) => v.favorite);
   if (currentFilter === "unseen") output = output.filter((v) => !v.watched);
   if (currentFilter === "seen") output = output.filter((v) => v.watched);
@@ -265,6 +277,86 @@ function renderFolders() {
   folderTree.appendChild(frag);
 }
 
+function getTopicBuckets(videos) {
+  const buckets = new Map();
+  (videos || []).forEach((video) => {
+    const folder = String(video.folder || "").replace(/\\/g, "/");
+    const root = folder.split("/")[0] || "root";
+    const prev = buckets.get(root) || 0;
+    buckets.set(root, prev + 1);
+  });
+  return Array.from(buckets.entries())
+    .map(([key, count]) => ({ key, label: key === "root" ? "Inicio" : key, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function renderTopics() {
+  if (!topicsChips) return;
+  topicsChips.innerHTML = "";
+
+  const base = [{ key: "all", label: "Todo" }];
+  const buckets = getTopicBuckets(allVideos).slice(0, 12).map((x) => ({ key: x.key, label: x.label }));
+  const items = [...base, ...buckets];
+
+  items.forEach((item) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "topic-chip";
+    btn.textContent = item.label;
+    if (item.key === selectedTopic) btn.classList.add("active");
+    btn.addEventListener("click", () => {
+      selectedTopic = item.key;
+      renderTopics();
+      renderVideos();
+      if (filteredVideos.length) {
+        const i = Math.floor(Math.random() * filteredVideos.length);
+        selectAndPlay(filteredVideos[i]);
+      }
+    });
+    topicsChips.appendChild(btn);
+  });
+}
+
+function renderShorts() {
+  if (!shortsRail) return;
+  shortsRail.innerHTML = "";
+
+  const unseen = allVideos.filter((v) => !v.watched);
+  const heavy = [...allVideos].sort((a, b) => (b.size_bytes || 0) - (a.size_bytes || 0));
+  const pool = [...unseen.slice(0, 8), ...heavy.slice(0, 8)];
+  const unique = [];
+  const seen = new Set();
+  for (const v of pool) {
+    if (!v || seen.has(v.relative_path)) continue;
+    seen.add(v.relative_path);
+    unique.push(v);
+    if (unique.length >= 12) break;
+  }
+
+  if (!unique.length) {
+    const empty = document.createElement("div");
+    empty.className = "short-card empty";
+    empty.textContent = "Sin videos para mostrar";
+    shortsRail.appendChild(empty);
+    return;
+  }
+
+  unique.forEach((video) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "short-card";
+    card.innerHTML = `
+      <img src="${video.thumbnail_url || `/api/thumb/video?path=${encodeURIComponent(video.relative_path)}`}" alt="thumb" />
+      <div class="short-meta">
+        <strong>${video.name}</strong>
+        <small>${video.views || 0} vistas</small>
+      </div>
+    `;
+    card.addEventListener("click", () => selectAndPlay(video));
+    shortsRail.appendChild(card);
+  });
+}
+
 function selectAndPlay(video) {
   if (!video) return;
   selectedVideo = video;
@@ -327,6 +419,8 @@ function renderVideos() {
   const filtered = applyFilter(allVideos);
   filteredVideos = filtered;
   countBadge.textContent = String(filtered.length);
+  renderTopics();
+  renderShorts();
   renderRecommendations();
 
   if (!filtered.length) {
@@ -703,6 +797,13 @@ saveLogBtn.addEventListener("click", () => saveLogModal().catch(showError));
 closeLogBtn.addEventListener("click", () => closeLogModal());
 logModal.addEventListener("click", (event) => {
   if (event.target === logModal) closeLogModal();
+});
+
+toggleChannelsBtn.addEventListener("click", () => {
+  explorer.classList.toggle("channels-collapsed");
+  const collapsed = explorer.classList.contains("channels-collapsed");
+  toggleChannelsBtn.textContent = collapsed ? "☷" : "☰";
+  toggleChannelsBtn.title = collapsed ? "Expandir canales" : "Colapsar canales";
 });
 
 logoutBtn.addEventListener("click", async () => {
