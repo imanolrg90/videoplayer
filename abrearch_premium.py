@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QSize, QByteArray
 from PyQt6.QtCore import QTimer, QMetaObject, Q_ARG, QRect, QPoint, QEvent
-from PyQt6.QtGui import QPixmap, QIcon, QShortcut, QKeySequence, QPainter, QPen
+from PyQt6.QtGui import QPixmap, QIcon, QShortcut, QKeySequence, QPainter, QPen, QPainterPath
 from PyQt6.QtGui import QColor, QDrag, QBrush
 from PyQt6.QtCore import QMimeData
 from PyQt6.QtCore import QUrl
@@ -7497,18 +7497,14 @@ class VideoBrowserApp(QMainWindow):
                 pm = QPixmap()
                 pm.loadFromData(QByteArray(thumb_data))
                 if not pm.isNull():
-                    pm_hi = pm.scaled(320, 180, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                    pm_hi.setDevicePixelRatio(2.0)
-                    thumb_item.setIcon(QIcon(pm_hi))
+                    thumb_item.setIcon(self._make_youtube_thumb_icon(pm, self.tabla.iconSize()))
             else:
                 if v.suffix.lower() in EXTENSIONES_VIDEO:
                     sin_thumb.append(v)
                 elif v.suffix.lower() in EXTENSIONES_IMAGEN:
                     pm = QPixmap(str(v))
                     if not pm.isNull():
-                        pm_hi = pm.scaled(320, 180, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                        pm_hi.setDevicePixelRatio(2.0)
-                        thumb_item.setIcon(QIcon(pm_hi))
+                        thumb_item.setIcon(self._make_youtube_thumb_icon(pm, self.tabla.iconSize()))
             self.tabla.setItem(r, 0, thumb_item)
 
             # Col 1: nombre
@@ -8048,8 +8044,46 @@ class VideoBrowserApp(QMainWindow):
             pm = QPixmap()
             pm.loadFromData(QByteArray(data))
             if not pm.isNull():
-                return QIcon(pm.scaled(size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation))
+                return self._make_youtube_thumb_icon(pm, size)
         return self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
+
+    def _make_youtube_thumb_icon(self, source_pm: QPixmap, size: QSize, radius: int = 12):
+        """Render a centered 16:9 thumb with YouTube-like rounded corners."""
+        if source_pm.isNull() or size.width() <= 0 or size.height() <= 0:
+            return self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
+
+        dpr = 2.0
+        w = int(size.width() * dpr)
+        h = int(size.height() * dpr)
+        r = int(radius * dpr)
+
+        canvas = QPixmap(w, h)
+        canvas.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
+        clip_path = QPainterPath()
+        clip_path.addRoundedRect(0.0, 0.0, float(w), float(h), float(r), float(r))
+        painter.setClipPath(clip_path)
+
+        # Fondo oscuro de vídeo para pillarbox/letterbox, similar a YouTube.
+        painter.fillRect(0, 0, w, h, QColor("#0f0f0f"))
+
+        scaled = source_pm.scaled(
+            w,
+            h,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        x = max(0, (w - scaled.width()) // 2)
+        y = max(0, (h - scaled.height()) // 2)
+        painter.drawPixmap(x, y, scaled)
+        painter.end()
+
+        canvas.setDevicePixelRatio(dpr)
+        return QIcon(canvas)
 
     def _populate_reco_list(self, widget: QListWidget, videos: list, thumbs_map: dict, *, shorts=False):
         if not hasattr(self, "reco_list"):
