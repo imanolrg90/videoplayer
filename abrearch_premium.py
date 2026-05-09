@@ -4047,7 +4047,7 @@ class VideoBrowserApp(QMainWindow):
         self.btn_hamburger.setToolTip("Mostrar / ocultar carpetas")
         self.btn_hamburger.setFixedSize(40, 36)
         self.btn_hamburger.setCheckable(True)
-        self.btn_hamburger.clicked.connect(self._toggle_sidebar)
+        self.btn_hamburger.pressed.connect(self._toggle_sidebar)
         bar.addWidget(self.btn_hamburger)
         self.lbl_yt_logo = QLabel("▶ YouTube")
         self.lbl_yt_logo.setObjectName("ytLogo")
@@ -4164,6 +4164,10 @@ class VideoBrowserApp(QMainWindow):
         self.tree.setColumnWidth(0, FOLDER_TREE_ICON_SIZE + 44)
         for c in (2, 3, 4, 5, 6, 7):
             self.tree.header().setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
+            self.tree.setColumnHidden(c, True)
+        self.tree.setHeaderHidden(True)
+        self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.tree.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.tree.currentItemChanged.connect(self._on_tree_select)
         self.tree.itemDoubleClicked.connect(self._on_tree_double_click)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -4717,7 +4721,7 @@ class VideoBrowserApp(QMainWindow):
         if tree is None:
             return
         # Anchura aprox de un sidebar tipo YouTube
-        w = max(300, min(420, int(self.width() * 0.28)))
+        w = max(360, min(560, int(self.width() * 0.36)))
         # Posicionar bajo el botón hamburguesa
         x = 12
         y = 60
