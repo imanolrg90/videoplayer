@@ -3710,6 +3710,19 @@ class VideoBrowserApp(QMainWindow):
                 font-weight: 600;
             }
 
+            QPushButton#recommend {
+                background: #fff5f5;
+                border: 1px solid #ffd7d7;
+                border-radius: 12px;
+                color: #7a1212;
+                padding: 6px 12px;
+                font-weight: 600;
+            }
+            QPushButton#recommend:hover {
+                background: #ffeded;
+                border-color: #ffbcbc;
+            }
+
             /* ── Checkboxes ── */
             QCheckBox {
                 color: #0f0f0f;
@@ -4078,6 +4091,39 @@ class VideoBrowserApp(QMainWindow):
         self.lbl_hash.setObjectName("count")
         filtros_row.addWidget(self.lbl_hash)
         root.addLayout(filtros_row)
+
+        # -- recomendaciones estilo YouTube --
+        rec_frame = QFrame()
+        rec_frame.setObjectName("detailFrame")
+        rec_row = QHBoxLayout(rec_frame)
+        rec_row.setContentsMargins(8, 6, 8, 6)
+        rec_row.setSpacing(6)
+        rec_lbl = QLabel("Recomendados:")
+        rec_lbl.setObjectName("count")
+        rec_row.addWidget(rec_lbl)
+
+        self.btn_rec_for_you = QPushButton("✨ Para ti")
+        self.btn_rec_for_you.setObjectName("recommend")
+        self.btn_rec_for_you.clicked.connect(lambda: self._play_recommendation("for_you"))
+        rec_row.addWidget(self.btn_rec_for_you)
+
+        self.btn_rec_most = QPushButton("🔥 Más vistos")
+        self.btn_rec_most.setObjectName("recommend")
+        self.btn_rec_most.clicked.connect(lambda: self._play_recommendation("most_viewed"))
+        rec_row.addWidget(self.btn_rec_most)
+
+        self.btn_rec_fav = QPushButton("⭐ Favoritos")
+        self.btn_rec_fav.setObjectName("recommend")
+        self.btn_rec_fav.clicked.connect(lambda: self._play_recommendation("favorites"))
+        rec_row.addWidget(self.btn_rec_fav)
+
+        self.btn_rec_shorts = QPushButton("🎬 Shorts")
+        self.btn_rec_shorts.setObjectName("recommend")
+        self.btn_rec_shorts.clicked.connect(lambda: self._play_recommendation("shorts"))
+        rec_row.addWidget(self.btn_rec_shorts)
+
+        rec_row.addStretch()
+        root.addWidget(rec_frame)
 
         # -- splitter: árbol + contenido --
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -7809,6 +7855,73 @@ class VideoBrowserApp(QMainWindow):
             self.proximo_video()
         else:
             QMessageBox.warning(self, "Aviso", "No hay elementos para este filtro.")
+
+    def _recommendation_source_videos(self):
+        """Base list for recommendation buttons (folder-aware when applicable)."""
+        try:
+            if self.carpeta_actual:
+                return [
+                    v for v in self.videos_base
+                    if self.carpeta_actual in v.parents and v.suffix.lower() in EXTENSIONES_VIDEO and v.exists()
+                ]
+            return [v for v in self.videos_base if v.suffix.lower() in EXTENSIONES_VIDEO and v.exists()]
+        except Exception:
+            return []
+
+    def _duration_seconds_cached(self, ruta: Path):
+        txt = self._duration_text(ruta)
+        m = re.search(r"^(\d+)m\s+(\d+)s$", str(txt).strip())
+        if m:
+            return int(m.group(1)) * 60 + int(m.group(2))
+        m2 = re.search(r"^(\d+)s$", str(txt).strip())
+        if m2:
+            return int(m2.group(1))
+        return 10**9
+
+    def _play_recommendation(self, kind: str):
+        pool = self._recommendation_source_videos()
+        if not pool:
+            QMessageBox.information(self, "Recomendados", "No hay vídeos disponibles para recomendar.")
+            return
+
+        stats_map = self.db.obtener_stats_batch([str(v) for v in pool])
+
+        def _stats(v):
+            return stats_map.get(str(v).replace('\\', '/'), {})
+
+        choice = None
+
+        if kind == "favorites":
+            favs = [v for v in pool if v.name.lower().startswith("top ")]
+            if favs:
+                favs.sort(key=lambda v: _stats(v).get('reproducciones', 0), reverse=True)
+                choice = random.choice(favs[: min(len(favs), 20)])
+
+        elif kind == "most_viewed":
+            top = sorted(pool, key=lambda v: _stats(v).get('reproducciones', 0), reverse=True)
+            if top:
+                choice = random.choice(top[: min(len(top), 25)])
+
+        elif kind == "shorts":
+            shorts = sorted(pool, key=lambda v: self._duration_seconds_cached(v))
+            shorts = [v for v in shorts if self._duration_seconds_cached(v) <= 95] or shorts[:40]
+            if shorts:
+                choice = random.choice(shorts[: min(len(shorts), 30)])
+
+        else:  # for_you
+            unseen = [v for v in pool if not self._is_video_revisado(v)]
+            base = unseen or pool
+            base.sort(key=lambda v: _stats(v).get('reproducciones', 0))
+            choice = random.choice(base[: min(len(base), 35)]) if base else None
+
+        if not choice:
+            QMessageBox.information(self, "Recomendados", "No se pudo obtener una recomendación ahora mismo.")
+            return
+
+        self.forzar_guardado_tiempo_actual()
+        self.video_elegido = Path(choice)
+        self._reproducir_elegido()
+        self._notify(f"Recomendado: {self.video_elegido.name}", 1800)
 
     def aplicar_filtros(self, lista, modo):
         if modo == '8':
