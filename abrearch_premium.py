@@ -3627,6 +3627,11 @@ class VideoBrowserApp(QMainWindow):
                 outline: none;
                 padding: 6px;
             }
+            QTreeWidget#sidebarTree {
+                background: #ffffff;
+                border: 1px solid #d0d0d0;
+                border-radius: 14px;
+            }
             QTreeWidget::item {
                 padding: 10px 6px;
                 border-radius: 8px;
@@ -4140,11 +4145,14 @@ class VideoBrowserApp(QMainWindow):
         filtros_row.addWidget(self.lbl_hash)
         root.addLayout(filtros_row)
 
-        # -- splitter: árbol + reproductor (centro) + lista (derecha) --
+        # -- splitter: reproductor (centro) + lista (derecha) --
+        # El árbol de carpetas NO va en el splitter: es un overlay flotante
+        # que se muestra encima del contenido al pulsar la hamburguesa.
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self._main_splitter = splitter
 
-        self.tree = QTreeWidget()
+        self.tree = QTreeWidget(self)
+        self.tree.setObjectName("sidebarTree")
         self.tree.setHeaderLabels(["", "Carpeta", "Vistas", "Tiempo", "Peso", "% Rev", "% Hash", "Mini"])
         self.tree.setIndentation(16)
         self.tree.setIconSize(QSize(FOLDER_TREE_ICON_SIZE, FOLDER_TREE_ICON_SIZE))
@@ -4158,9 +4166,18 @@ class VideoBrowserApp(QMainWindow):
         self.tree.itemDoubleClicked.connect(self._on_tree_double_click)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._tree_context_menu)
-        splitter.addWidget(self.tree)
-        # ocultar por defecto (estilo YouTube: se despliega con la hamburguesa)
+        # Overlay flotante: hijo de la ventana principal, oculto por defecto
         self.tree.setVisible(False)
+        self.tree.raise_()
+        try:
+            from PyQt6.QtWidgets import QGraphicsDropShadowEffect
+            _shadow = QGraphicsDropShadowEffect(self)
+            _shadow.setBlurRadius(28)
+            _shadow.setOffset(0, 4)
+            _shadow.setColor(QColor(0, 0, 0, 90))
+            self.tree.setGraphicsEffect(_shadow)
+        except Exception:
+            pass
 
         # ===== Centro: reproductor grande =====
         center = QWidget()
@@ -4402,13 +4419,11 @@ class VideoBrowserApp(QMainWindow):
 
         splitter.addWidget(center)
         splitter.addWidget(right)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 6)
-        splitter.setStretchFactor(2, 4)
-        splitter.setSizes([280, 820, 480])
-        splitter.setCollapsible(0, True)
+        splitter.setStretchFactor(0, 6)
+        splitter.setStretchFactor(1, 4)
+        splitter.setSizes([820, 480])
+        splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
-        splitter.setCollapsible(2, False)
         root.addWidget(splitter, 1)
 
         # filtro global de eventos para auto-cerrar el sidebar al pulsar fuera
@@ -4704,6 +4719,27 @@ class VideoBrowserApp(QMainWindow):
         self._sync_privacy_overlay_geometry()
         if self._loading_overlay is not None:
             self._loading_overlay.setGeometry(self.rect())
+        self._sync_sidebar_overlay_geometry()
+
+    def _sync_sidebar_overlay_geometry(self):
+        tree = getattr(self, "tree", None)
+        btn_h = getattr(self, "btn_hamburger", None)
+        if tree is None:
+            return
+        # Anchura aprox de un sidebar tipo YouTube
+        w = max(300, min(420, int(self.width() * 0.28)))
+        # Posicionar bajo el botón hamburguesa
+        x = 12
+        y = 60
+        if btn_h is not None:
+            try:
+                pt = btn_h.mapTo(self, btn_h.rect().bottomLeft())
+                x = max(8, pt.x())
+                y = pt.y() + 6
+            except Exception:
+                pass
+        h = max(200, self.height() - y - 20)
+        tree.setGeometry(x, y, w, h)
 
     def _update_thumb_progress(self, actual=None):
         if self.thumb_total <= 0:
@@ -5396,7 +5432,13 @@ class VideoBrowserApp(QMainWindow):
         if tree is None:
             return
         new_state = not tree.isVisible()
-        tree.setVisible(new_state)
+        if new_state:
+            self._sync_sidebar_overlay_geometry()
+            tree.setVisible(True)
+            tree.raise_()
+            tree.setFocus()
+        else:
+            tree.setVisible(False)
         btn_h = getattr(self, "btn_hamburger", None)
         if btn_h is not None:
             try:
@@ -5411,20 +5453,16 @@ class VideoBrowserApp(QMainWindow):
             if event.type() == QEvent.Type.MouseButtonPress:
                 tree = getattr(self, "tree", None)
                 btn_h = getattr(self, "btn_hamburger", None)
-                if tree is not None and tree.isVisible() and btn_h is not None:
-                    inside = False
-                    p = obj
-                    while p is not None:
-                        if p is tree or p is btn_h:
-                            inside = True
-                            break
-                        p = p.parent() if hasattr(p, "parent") else None
-                    if not inside:
+                if tree is not None and tree.isVisible() and isinstance(obj, QWidget):
+                    inside_tree = (obj is tree) or tree.isAncestorOf(obj)
+                    inside_btn = btn_h is not None and (obj is btn_h or btn_h.isAncestorOf(obj))
+                    if not inside_tree and not inside_btn:
                         tree.setVisible(False)
-                        try:
-                            btn_h.setChecked(False)
-                        except Exception:
-                            pass
+                        if btn_h is not None:
+                            try:
+                                btn_h.setChecked(False)
+                            except Exception:
+                                pass
         except Exception:
             pass
         photo_preview_label = getattr(self, "photo_preview_label", None)
