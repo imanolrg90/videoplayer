@@ -3606,6 +3606,18 @@ class VideoBrowserApp(QMainWindow):
                 letter-spacing: 0.2px;
             }
 
+            QPushButton#hamburger {
+                background: transparent;
+                border: none;
+                border-radius: 18px;
+                font-size: 16pt;
+                color: #0f0f0f;
+                padding: 0px;
+            }
+            QPushButton#hamburger:hover  { background: #ececec; }
+            QPushButton#hamburger:pressed,
+            QPushButton#hamburger:checked { background: #e0e0e0; }
+
             /* ── Árbol ── */
             QTreeWidget {
                 background: #ffffff;
@@ -4025,6 +4037,13 @@ class VideoBrowserApp(QMainWindow):
         # -- toolbar --
         bar = QHBoxLayout()
         bar.setSpacing(8)
+        self.btn_hamburger = QPushButton("☰")
+        self.btn_hamburger.setObjectName("hamburger")
+        self.btn_hamburger.setToolTip("Mostrar / ocultar carpetas")
+        self.btn_hamburger.setFixedSize(40, 36)
+        self.btn_hamburger.setCheckable(True)
+        self.btn_hamburger.clicked.connect(self._toggle_sidebar)
+        bar.addWidget(self.btn_hamburger)
         self.lbl_yt_logo = QLabel("▶ YouTube")
         self.lbl_yt_logo.setObjectName("ytLogo")
         bar.addWidget(self.lbl_yt_logo)
@@ -4121,8 +4140,9 @@ class VideoBrowserApp(QMainWindow):
         filtros_row.addWidget(self.lbl_hash)
         root.addLayout(filtros_row)
 
-        # -- splitter: árbol + contenido --
+        # -- splitter: árbol + reproductor (centro) + lista (derecha) --
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._main_splitter = splitter
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["", "Carpeta", "Vistas", "Tiempo", "Peso", "% Rev", "% Hash", "Mini"])
@@ -4139,23 +4159,29 @@ class VideoBrowserApp(QMainWindow):
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._tree_context_menu)
         splitter.addWidget(self.tree)
+        # ocultar por defecto (estilo YouTube: se despliega con la hamburguesa)
+        self.tree.setVisible(False)
 
-        right = QWidget()
-        rcol = QVBoxLayout(right)
-        rcol.setContentsMargins(0, 0, 0, 0)
-        rcol.setSpacing(4)
+        # ===== Centro: reproductor grande =====
+        center = QWidget()
+        center.setObjectName("centerCol")
+        ccol = QVBoxLayout(center)
+        ccol.setContentsMargins(0, 0, 0, 0)
+        ccol.setSpacing(6)
 
         self.lbl_folder = QLabel("")
         self.lbl_folder.setObjectName("count")
-        rcol.addWidget(self.lbl_folder)
+        ccol.addWidget(self.lbl_folder)
 
-        right_splitter = QSplitter(Qt.Orientation.Vertical)
-        right_splitter.setChildrenCollapsible(False)
+        # ===== Columna derecha: recomendados + lista de vídeos =====
+        right = QWidget()
+        right.setObjectName("rightCol")
+        rcol = QVBoxLayout(right)
+        rcol.setContentsMargins(0, 0, 0, 0)
+        rcol.setSpacing(6)
 
-        top_panel = QWidget()
-        top_layout = QVBoxLayout(top_panel)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        top_layout.setSpacing(4)
+        top_panel = right  # alias para mantener nombre legacy en el resto del método
+        top_layout = rcol
 
         # -- panel visual de recomendados --
         self.reco_panel = QFrame()
@@ -4197,9 +4223,9 @@ class VideoBrowserApp(QMainWindow):
         self.tabla.setSortingEnabled(True)
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setShowGrid(False)
-        self.tabla.setIconSize(QSize(160, 90))
+        self.tabla.setIconSize(QSize(220, 124))
         self.tabla.verticalHeader().setVisible(False)
-        self.tabla.verticalHeader().setDefaultSectionSize(96)
+        self.tabla.verticalHeader().setDefaultSectionSize(132)
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -4207,7 +4233,7 @@ class VideoBrowserApp(QMainWindow):
         self.tabla.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        self.tabla.setColumnWidth(0, 172)
+        self.tabla.setColumnWidth(0, 232)
         self.tabla.currentCellChanged.connect(self._on_row_changed)
         self.tabla.cellClicked.connect(self._on_table_cell_clicked)
         self.tabla.cellDoubleClicked.connect(lambda r, c: self.reproducir_video_actual())
@@ -4215,7 +4241,7 @@ class VideoBrowserApp(QMainWindow):
         self.tabla.customContextMenuRequested.connect(self._tabla_context_menu)
         top_layout.addWidget(self.tabla, 1)
 
-        # progress
+        # progress (al pie de la columna derecha)
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         top_layout.addWidget(self.progress_bar)
@@ -4231,9 +4257,7 @@ class VideoBrowserApp(QMainWindow):
         self.lbl_thumb_progreso.setVisible(False)
         top_layout.addWidget(self.lbl_thumb_progreso)
 
-        right_splitter.addWidget(top_panel)
-
-        # detalle + botones
+        # detalle + botones (en la columna central, debajo del reproductor)
         detail = QFrame()
         detail.setObjectName("detailFrame")
         dl = QVBoxLayout(detail)
@@ -4374,20 +4398,24 @@ class VideoBrowserApp(QMainWindow):
         btns.addWidget(btn_duplis)
 
         dl.addLayout(btns)
-        right_splitter.addWidget(detail)
-        right_splitter.setStretchFactor(0, 7)
-        right_splitter.setStretchFactor(1, 5)
-        right_splitter.setSizes([520, 360])
+        ccol.addWidget(detail, 1)
 
-        rcol.addWidget(right_splitter, 1)
-
+        splitter.addWidget(center)
         splitter.addWidget(right)
-        splitter.setStretchFactor(0, 4)
+        splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 6)
-        splitter.setSizes([480, 720])
-        splitter.setCollapsible(0, False)
+        splitter.setStretchFactor(2, 4)
+        splitter.setSizes([280, 820, 480])
+        splitter.setCollapsible(0, True)
         splitter.setCollapsible(1, False)
+        splitter.setCollapsible(2, False)
         root.addWidget(splitter, 1)
+
+        # filtro global de eventos para auto-cerrar el sidebar al pulsar fuera
+        try:
+            QApplication.instance().installEventFilter(self)
+        except Exception:
+            pass
 
         self._set_active_mode_button(self.modo_actual)
         self._setup_shortcuts()
@@ -5363,8 +5391,42 @@ class VideoBrowserApp(QMainWindow):
         self.tabla.viewport().installEventFilter(self)
         self.tabla.viewport().setMouseTracking(True)
 
+    def _toggle_sidebar(self):
+        tree = getattr(self, "tree", None)
+        if tree is None:
+            return
+        new_state = not tree.isVisible()
+        tree.setVisible(new_state)
+        btn_h = getattr(self, "btn_hamburger", None)
+        if btn_h is not None:
+            try:
+                btn_h.setChecked(new_state)
+            except Exception:
+                pass
+
     def eventFilter(self, obj, event):
         from PyQt6.QtCore import QEvent
+        # Auto-cerrar el árbol (sidebar) al pulsar fuera de él o del botón hamburguesa
+        try:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                tree = getattr(self, "tree", None)
+                btn_h = getattr(self, "btn_hamburger", None)
+                if tree is not None and tree.isVisible() and btn_h is not None:
+                    inside = False
+                    p = obj
+                    while p is not None:
+                        if p is tree or p is btn_h:
+                            inside = True
+                            break
+                        p = p.parent() if hasattr(p, "parent") else None
+                    if not inside:
+                        tree.setVisible(False)
+                        try:
+                            btn_h.setChecked(False)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
         photo_preview_label = getattr(self, "photo_preview_label", None)
         video_widget = getattr(self, "video_widget", None)
         if obj is self.tabla.viewport():
