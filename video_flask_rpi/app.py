@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
 import mimetypes
 import os
 import sqlite3
@@ -17,8 +19,8 @@ load_dotenv()
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".wmv"}
 
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "/mnt/media_share")).resolve()
-STATE_DB_PATH = Path(os.getenv("STATE_DB_PATH", "./video_state.db")).resolve()
-APP_LOG_PATH = Path(os.getenv("APP_LOG_PATH", "./app.log")).resolve()
+DESKTOP_DB_PATH = Path(os.getenv("DESKTOP_DB_PATH", "./videos.db")).resolve()
+APP_LOG_PATH = Path(os.getenv("APP_LOG_PATH", "./LOG/abrearch_premium.log")).resolve()
 THUMB_CACHE_DIR = (Path(__file__).resolve().parent / "thumb_cache").resolve()
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "/usr/bin/ffmpeg").strip()
 APP_USERNAME = os.getenv("APP_USERNAME", "admin")
@@ -29,21 +31,81 @@ app.secret_key = os.getenv("SECRET_KEY", "change-this-secret")
 
 
 def init_db() -> None:
-    STATE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(STATE_DB_PATH) as conn:
+    DESKTOP_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(DESKTOP_DB_PATH) as conn:
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS video_state (
-                relative_path TEXT PRIMARY KEY,
-                favorite INTEGER NOT NULL DEFAULT 0,
-                watched INTEGER NOT NULL DEFAULT 0,
-                last_viewed TEXT,
-                views INTEGER NOT NULL DEFAULT 0,
-                watched_seconds INTEGER NOT NULL DEFAULT 0
+            CREATE TABLE IF NOT EXISTS video_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ruta TEXT UNIQUE NOT NULL,
+                nombre_archivo TEXT,
+                reproducciones INTEGER DEFAULT 0,
+                tiempo_visto_seg INTEGER DEFAULT 0,
+                ultima_reproduccion TEXT,
+                es_favorito BOOLEAN DEFAULT 0,
+                fue_visto BOOLEAN DEFAULT 0,
+                miniatura BLOB,
+                fecha_created TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS video_hashes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ruta TEXT UNIQUE NOT NULL,
+                tamaño_bytes INTEGER,
+                hash_visual BLOB,
+                fecha_calculado TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_settings (
+                clave TEXT PRIMARY KEY,
+                valor TEXT,
+                fecha_updated TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pending_renames (
+                ruta_origen TEXT PRIMARY KEY,
+                fecha_added TEXT DEFAULT CURRENT_TIMESTAMP,
+                intentos INTEGER DEFAULT 0,
+                ultimo_error TEXT
             )
             """
         )
         conn.commit()
+
+
+def setup_logging() -> logging.Logger:
+    logger = logging.getLogger("abrearch_premium")
+    if logger.handlers:
+        return logger
+    logger.setLevel(logging.INFO)
+    try:
+        APP_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(APP_LOG_PATH, encoding="utf-8")
+    except OSError:
+        handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(threadName)s %(message)s"))
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
+
+
+LOGGER = setup_logging()
+init_db()
+
+
+def db_connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(DESKTOP_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def auth_required(view_func):
@@ -66,6 +128,28 @@ def is_inside_root(root: Path, candidate: Path) -> bool:
 
 def normalize_rel(path: str) -> str:
     return path.replace("\\", "/").strip("/")
+
+
+def norm_abs(path: Path | str) -> str:
+    return str(path).replace("\\", "/")
+
+
+def is_marked_rwd(name: str) -> bool:
+    lower = name.lower()
+    if lower.startswith("rwd ") or lower.startswith("top rwd "):
+        return True
+    stem = Path(name).stem.lower()
+    return stem.endswith("_rwd")
+
+
+def target_top_name(name: str, make_favorite: bool) -> str:
+    if make_favorite:
+        if name.lower().startswith("top "):
+            return name
+        return f"top {name}"
+    if name.lower().startswith("top "):
+        return name[4:]
+    return name
 
 
 def resolve_folder_path(relative_folder: str) -> Path | None:
@@ -145,39 +229,75 @@ def count_videos_in_folder(folder: Path) -> int:
 def get_states(rel_paths: list[str]) -> dict[str, dict]:
     if not rel_paths:
         return {}
-    placeholders = ",".join("?" for _ in rel_paths)
-    with sqlite3.connect(STATE_DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            f"SELECT relative_path, favorite, watched, last_viewed, views, watched_seconds FROM video_state WHERE relative_path IN ({placeholders})",
-            rel_paths,
-        ).fetchall()
-
-    return {
-        row["relative_path"]: {
-            "favorite": bool(row["favorite"]),
-            "watched": bool(row["watched"]),
-            "last_viewed": row["last_viewed"],
-            "views": int(row["views"] or 0),
-            "watched_seconds": int(row["watched_seconds"] or 0),
+    abs_paths = [norm_abs((MEDIA_ROOT / rel).resolve()) for rel in rel_paths]
+    placeholders = ",".join("?" for _ in abs_paths)
+    out = {
+        rel: {
+            "favorite": False,
+            "watched": False,
+            "last_viewed": None,
+            "views": 0,
+            "watched_seconds": 0,
+            "has_hash": False,
+            "thumb_blob": None,
         }
-        for row in rows
+        for rel in rel_paths
     }
+
+    abs_to_rel = dict(zip(abs_paths, rel_paths))
+
+    with db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT ruta, reproducciones, tiempo_visto_seg, ultima_reproduccion,
+                   es_favorito, fue_visto, miniatura
+            FROM video_stats
+            WHERE ruta IN ({placeholders})
+            """,
+            abs_paths,
+        ).fetchall()
+        for row in rows:
+            rel = abs_to_rel.get(norm_abs(row["ruta"]))
+            if not rel:
+                continue
+            out[rel].update(
+                {
+                    "favorite": bool(row["es_favorito"]),
+                    "watched": bool(row["fue_visto"]),
+                    "last_viewed": row["ultima_reproduccion"],
+                    "views": int(row["reproducciones"] or 0),
+                    "watched_seconds": int(row["tiempo_visto_seg"] or 0),
+                    "thumb_blob": bytes(row["miniatura"]) if row["miniatura"] else None,
+                }
+            )
+
+        hash_rows = conn.execute(
+            f"SELECT ruta FROM video_hashes WHERE hash_visual IS NOT NULL AND ruta IN ({placeholders})",
+            abs_paths,
+        ).fetchall()
+        for row in hash_rows:
+            rel = abs_to_rel.get(norm_abs(row["ruta"]))
+            if rel:
+                out[rel]["has_hash"] = True
+
+    return out
 
 
 def upsert_state(relative_path: str, favorite: bool | None = None, watched: bool | None = None, mark_viewed: bool = False) -> dict:
-    with sqlite3.connect(STATE_DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    abs_path = norm_abs((MEDIA_ROOT / relative_path).resolve())
+    nombre = Path(abs_path).name
+
+    with db_connect() as conn:
         row = conn.execute(
-            "SELECT favorite, watched, last_viewed, views, watched_seconds FROM video_state WHERE relative_path = ?",
-            (relative_path,),
+            "SELECT reproducciones, tiempo_visto_seg, ultima_reproduccion, es_favorito, fue_visto FROM video_stats WHERE ruta = ?",
+            (abs_path,),
         ).fetchone()
 
-        current_fav = bool(row["favorite"]) if row else False
-        current_watched = bool(row["watched"]) if row else False
-        current_last = row["last_viewed"] if row else None
-        current_views = int(row["views"] or 0) if row else 0
-        current_secs = int(row["watched_seconds"] or 0) if row else 0
+        current_fav = bool(row["es_favorito"]) if row else False
+        current_watched = bool(row["fue_visto"]) if row else False
+        current_last = row["ultima_reproduccion"] if row else None
+        current_views = int(row["reproducciones"] or 0) if row else 0
+        current_secs = int(row["tiempo_visto_seg"] or 0) if row else 0
 
         new_fav = current_fav if favorite is None else bool(favorite)
         new_watched = current_watched if watched is None else bool(watched)
@@ -188,16 +308,17 @@ def upsert_state(relative_path: str, favorite: bool | None = None, watched: bool
 
         conn.execute(
             """
-            INSERT INTO video_state (relative_path, favorite, watched, last_viewed, views, watched_seconds)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(relative_path)
-            DO UPDATE SET favorite = excluded.favorite,
-                          watched = excluded.watched,
-                          last_viewed = excluded.last_viewed,
-                          views = excluded.views,
-                          watched_seconds = excluded.watched_seconds
+            INSERT INTO video_stats (ruta, nombre_archivo, reproducciones, tiempo_visto_seg, ultima_reproduccion, es_favorito, fue_visto)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ruta) DO UPDATE SET
+                nombre_archivo = excluded.nombre_archivo,
+                reproducciones = excluded.reproducciones,
+                tiempo_visto_seg = excluded.tiempo_visto_seg,
+                ultima_reproduccion = excluded.ultima_reproduccion,
+                es_favorito = excluded.es_favorito,
+                fue_visto = excluded.fue_visto
             """,
-            (relative_path, int(new_fav), int(new_watched), current_last, current_views, current_secs),
+            (abs_path, nombre, current_views, current_secs, current_last, int(new_fav), int(new_watched)),
         )
         conn.commit()
 
@@ -209,6 +330,75 @@ def upsert_state(relative_path: str, favorite: bool | None = None, watched: bool
         "views": current_views,
         "watched_seconds": current_secs,
     }
+
+
+def add_pending_rename(abs_path: str, error_msg: str | None = None) -> None:
+    with db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO pending_renames (ruta_origen, intentos, ultimo_error)
+            VALUES (?, 1, ?)
+            ON CONFLICT(ruta_origen) DO UPDATE SET
+                intentos = intentos + 1,
+                ultimo_error = excluded.ultimo_error,
+                fecha_added = CURRENT_TIMESTAMP
+            """,
+            (norm_abs(abs_path), error_msg),
+        )
+        conn.commit()
+
+
+def get_setting(clave: str, default: str = "") -> str:
+    with db_connect() as conn:
+        row = conn.execute("SELECT valor FROM app_settings WHERE clave = ?", (clave,)).fetchone()
+    if row is None:
+        return default
+    return row["valor"] if row["valor"] is not None else default
+
+
+def set_setting(clave: str, valor: str) -> None:
+    with db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO app_settings (clave, valor, fecha_updated)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(clave) DO UPDATE SET
+                valor = excluded.valor,
+                fecha_updated = CURRENT_TIMESTAMP
+            """,
+            (clave, valor),
+        )
+        conn.commit()
+
+
+def queue_pending_delete(abs_path: str) -> None:
+    raw = get_setting("pending_delete_paths", "[]")
+    try:
+        data = json.loads(raw) if raw else []
+    except Exception:
+        data = []
+    s = {str(p).replace("\\", "/") for p in data if p}
+    s.add(norm_abs(abs_path))
+    set_setting("pending_delete_paths", json.dumps(sorted(s), ensure_ascii=False))
+
+
+def queue_pending_fav_rename(old_abs: str, new_abs: str) -> None:
+    raw = get_setting("pending_fav_renames", "[]")
+    try:
+        data = json.loads(raw) if raw else []
+    except Exception:
+        data = []
+    mapping = {}
+    for row in data:
+        if isinstance(row, dict) and row.get("old") and row.get("new"):
+            mapping[str(row["old"]).replace("\\", "/")] = str(row["new"]).replace("\\", "/")
+    mapping[norm_abs(old_abs)] = norm_abs(new_abs)
+    rows = [{"old": k, "new": v} for k, v in sorted(mapping.items())]
+    set_setting("pending_fav_renames", json.dumps(rows, ensure_ascii=False))
+
+
+def queue_pending_rwd(abs_path: str) -> None:
+    add_pending_rename(abs_path)
 
 
 def ensure_thumbnail(video_path: Path) -> Path | None:
@@ -343,6 +533,7 @@ def videos_api():
         rel = str(p.relative_to(MEDIA_ROOT)).replace("\\", "/")
         state = state_map.get(rel, {})
         inferred_fav = p.name.lower().startswith("top ")
+        inferred_watched = is_marked_rwd(p.name)
         size_bytes = int(p.stat().st_size)
         items.append(
             {
@@ -352,11 +543,11 @@ def videos_api():
                 "size_bytes": size_bytes,
                 "size_mb": round(size_bytes / (1024 * 1024), 2),
                 "favorite": bool(state.get("favorite", False)) or inferred_fav,
-                "watched": bool(state.get("watched", False)),
+                "watched": bool(state.get("watched", False)) or inferred_watched,
                 "last_viewed": state.get("last_viewed"),
                 "views": int(state.get("views", 0)),
                 "watched_seconds": int(state.get("watched_seconds", 0)),
-                "has_hash": False,
+                "has_hash": bool(state.get("has_hash", False)),
                 "thumbnail_url": f"/api/thumb/video?path={rel}",
             }
         )
@@ -371,6 +562,12 @@ def thumb_video_api():
     video_path = resolve_video_path(rel)
     if not video_path:
         return jsonify({"detail": "Video no encontrado"}), 404
+
+    rel_norm = str(video_path.relative_to(MEDIA_ROOT)).replace("\\", "/")
+    state = get_states([rel_norm]).get(rel_norm, {})
+    blob = state.get("thumb_blob")
+    if blob:
+        return Response(blob, mimetype="image/jpeg")
 
     thumb = ensure_thumbnail(video_path)
     if not thumb:
@@ -442,7 +639,24 @@ def set_state_api():
     watched = None if watched_raw is None else watched_raw.lower() == "true"
 
     rel_norm = str(video_path.relative_to(MEDIA_ROOT)).replace("\\", "/")
+    abs_norm = norm_abs(video_path)
+
+    if watched is True:
+        queue_pending_rwd(abs_norm)
+
+    if favorite is not None:
+        new_name = target_top_name(video_path.name, favorite)
+        new_abs = norm_abs(video_path.with_name(new_name))
+        if new_abs != abs_norm:
+            queue_pending_fav_rename(abs_norm, new_abs)
+
     state = upsert_state(rel_norm, favorite=favorite, watched=watched)
+    LOGGER.info(
+        "API /video/state path=%s favorite=%s watched=%s",
+        rel_norm,
+        favorite,
+        watched,
+    )
     return jsonify({"ok": True, "state": state})
 
 
@@ -455,8 +669,25 @@ def viewed_api():
         return jsonify({"detail": "Video no encontrado"}), 404
 
     rel_norm = str(video_path.relative_to(MEDIA_ROOT)).replace("\\", "/")
+    abs_norm = norm_abs(video_path)
+    queue_pending_rwd(abs_norm)
     state = upsert_state(rel_norm, mark_viewed=True)
+    LOGGER.info("API /video/viewed path=%s queued_rwd=1", rel_norm)
     return jsonify({"ok": True, "state": state})
+
+
+@app.post("/api/video/delete")
+@auth_required
+def defer_delete_api():
+    rel = request.args.get("path", "")
+    video_path = resolve_video_path(rel)
+    if not video_path:
+        return jsonify({"detail": "Video no encontrado"}), 404
+
+    rel_norm = str(video_path.relative_to(MEDIA_ROOT)).replace("\\", "/")
+    queue_pending_delete(norm_abs(video_path))
+    LOGGER.info("API /video/delete path=%s queued_delete=1", rel_norm)
+    return jsonify({"ok": True, "queued": True, "path": rel_norm})
 
 
 @app.get("/api/log")

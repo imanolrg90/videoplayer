@@ -8,7 +8,9 @@ App web en Flask para dejar encendida en una Raspberry, apuntando a carpeta comp
 - Explorador de carpetas y videos.
 - Streaming con soporte Range.
 - Miniaturas de carpeta y video.
-- Favoritos, vistos, contador de reproducciones y tiempo en SQLite.
+- Usa la misma `videos.db` del escritorio (tablas/clave compatibles).
+- Operaciones diferidas compatibles: `rwd` (`pending_renames`), `top` y `borrar` (`app_settings`).
+- Log compartido en el mismo formato/tipo (`LOG/abrearch_premium.log`).
 - Filtros tipo app escritorio: Todos, Favoritos, Sin revisar, -Vistos, +Vistos, +Tiempo, Pesados.
 - Boton de log.
 
@@ -41,7 +43,11 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edita `.env` con tus valores reales.
+Edita `.env` con tus valores reales, especialmente:
+
+- `MEDIA_ROOT`: ruta montada de la carpeta compartida.
+- `DESKTOP_DB_PATH`: ruta al mismo `videos.db` que usa escritorio.
+- `APP_LOG_PATH`: ruta al mismo `LOG/abrearch_premium.log`.
 
 ## 3) Montar carpeta compartida SMB (ejemplo)
 

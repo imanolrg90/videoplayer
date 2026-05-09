@@ -24,6 +24,7 @@ const statusLine = document.getElementById("statusLine");
 const playBtn = document.getElementById("playBtn");
 const favBtn = document.getElementById("favBtn");
 const watchedBtn = document.getElementById("watchedBtn");
+const deleteBtn = document.getElementById("deleteBtn");
 const logModal = document.getElementById("logModal");
 const logContent = document.getElementById("logContent");
 const closeLogBtn = document.getElementById("closeLogBtn");
@@ -232,6 +233,7 @@ function updateSelectionUi() {
   playBtn.disabled = !has;
   favBtn.disabled = !has;
   watchedBtn.disabled = !has;
+  deleteBtn.disabled = !has;
 
   if (!has) {
     selectedTitle.textContent = "Selecciona un video";
@@ -273,6 +275,13 @@ async function updateSelectedState(payload) {
 
   renderVideos();
   updateSelectionUi();
+
+  if (Object.hasOwn(payload, "favorite")) {
+    setStatus("Top diferido guardado. Se aplicara al iniciar la app de escritorio.");
+  }
+  if (Object.hasOwn(payload, "watched") && payload.watched) {
+    setStatus("Marcado para RWD diferido.");
+  }
 }
 
 async function markViewedOnEnd() {
@@ -284,6 +293,16 @@ async function markViewedOnEnd() {
   if (match) Object.assign(match, selectedVideo);
   renderVideos();
   updateSelectionUi();
+  setStatus("Marcado como visto y en cola para RWD.");
+}
+
+async function queueDeleteSelected() {
+  if (!selectedVideo) return;
+  const confirmed = window.confirm("Se enviara a borrado diferido para la app de escritorio. Continuar?");
+  if (!confirmed) return;
+  const q = new URLSearchParams({ path: selectedVideo.relative_path });
+  await apiPost(`/api/video/delete?${q.toString()}`);
+  setStatus("Borrado diferido guardado.");
 }
 
 function setFilter(filter) {
@@ -344,6 +363,7 @@ filterHeavy.addEventListener("click", () => setFilter("heavy"));
 playBtn.addEventListener("click", () => playSelected());
 favBtn.addEventListener("click", () => updateSelectedState({ favorite: !selectedVideo.favorite }).catch(showError));
 watchedBtn.addEventListener("click", () => updateSelectedState({ watched: !selectedVideo.watched }).catch(showError));
+deleteBtn.addEventListener("click", () => queueDeleteSelected().catch(showError));
 
 videoPlayer.addEventListener("ended", () => markViewedOnEnd().catch(() => {}));
 
