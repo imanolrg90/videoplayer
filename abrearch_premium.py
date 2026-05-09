@@ -3457,7 +3457,6 @@ class VideoBrowserApp(QMainWindow):
         self.mode_buttons = {}
         self.filtro_texto = ""
         self.incluir_fotos_gestion = False
-        self.channel_buttons = {}
         self._photo_autonext_token = 0
         self.duration_cache = {}
         self.idle_hash_queue = []
@@ -3711,35 +3710,27 @@ class VideoBrowserApp(QMainWindow):
                 font-weight: 600;
             }
 
-            QPushButton#recommend {
-                background: #fff5f5;
-                border: 1px solid #ffd7d7;
-                border-radius: 12px;
-                color: #7a1212;
-                padding: 6px 12px;
-                font-weight: 600;
+            QListWidget#recoList {
+                background: #ffffff;
+                border: 1px solid #e8e8e8;
+                border-radius: 10px;
+                padding: 5px;
             }
-            QPushButton#recommend:hover {
-                background: #ffeded;
-                border-color: #ffbcbc;
+            QListWidget#recoList::item {
+                border: 1px solid #efefef;
+                border-radius: 10px;
+                padding: 4px;
+                margin: 2px;
+                background: #fcfcfc;
             }
-
-            QPushButton#channelChip {
-                background: #f4f8ff;
-                border: 1px solid #cfe0ff;
-                border-radius: 13px;
-                color: #123a7a;
-                padding: 5px 12px;
-                font-weight: 600;
+            QListWidget#recoList::item:selected {
+                border-color: #ff6b6b;
+                background: #fff1f1;
+                color: #0f0f0f;
             }
-            QPushButton#channelChip:hover {
-                background: #e9f2ff;
-                border-color: #b4ceff;
-            }
-            QPushButton#channelChip:checked {
-                background: #123a7a;
-                border-color: #123a7a;
-                color: #ffffff;
+            QListWidget#recoList::item:hover {
+                border-color: #ffd0d0;
+                background: #fff8f8;
             }
 
             /* ── Checkboxes ── */
@@ -4111,64 +4102,6 @@ class VideoBrowserApp(QMainWindow):
         filtros_row.addWidget(self.lbl_hash)
         root.addLayout(filtros_row)
 
-        # -- recomendaciones estilo YouTube --
-        rec_frame = QFrame()
-        rec_frame.setObjectName("detailFrame")
-        rec_row = QHBoxLayout(rec_frame)
-        rec_row.setContentsMargins(8, 6, 8, 6)
-        rec_row.setSpacing(6)
-        rec_lbl = QLabel("Recomendados:")
-        rec_lbl.setObjectName("count")
-        rec_row.addWidget(rec_lbl)
-
-        self.btn_rec_for_you = QPushButton("✨ Para ti")
-        self.btn_rec_for_you.setObjectName("recommend")
-        self.btn_rec_for_you.clicked.connect(lambda: self._play_recommendation("for_you"))
-        rec_row.addWidget(self.btn_rec_for_you)
-
-        self.btn_rec_most = QPushButton("🔥 Más vistos")
-        self.btn_rec_most.setObjectName("recommend")
-        self.btn_rec_most.clicked.connect(lambda: self._play_recommendation("most_viewed"))
-        rec_row.addWidget(self.btn_rec_most)
-
-        self.btn_rec_fav = QPushButton("⭐ Favoritos")
-        self.btn_rec_fav.setObjectName("recommend")
-        self.btn_rec_fav.clicked.connect(lambda: self._play_recommendation("favorites"))
-        rec_row.addWidget(self.btn_rec_fav)
-
-        self.btn_rec_shorts = QPushButton("🎬 Shorts")
-        self.btn_rec_shorts.setObjectName("recommend")
-        self.btn_rec_shorts.clicked.connect(lambda: self._play_recommendation("shorts"))
-        rec_row.addWidget(self.btn_rec_shorts)
-
-        rec_row.addStretch()
-        root.addWidget(rec_frame)
-
-        # -- canales tipo YouTube --
-        channels_frame = QFrame()
-        channels_frame.setObjectName("detailFrame")
-        channels_row = QHBoxLayout(channels_frame)
-        channels_row.setContentsMargins(8, 6, 8, 6)
-        channels_row.setSpacing(6)
-        channels_lbl = QLabel("Canales:")
-        channels_lbl.setObjectName("count")
-        channels_row.addWidget(channels_lbl)
-
-        self.channels_scroll = QScrollArea()
-        self.channels_scroll.setWidgetResizable(True)
-        self.channels_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.channels_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.channels_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.channels_scroll.setMinimumHeight(42)
-
-        self.channels_wrap = QWidget()
-        self.channels_layout = QHBoxLayout(self.channels_wrap)
-        self.channels_layout.setContentsMargins(2, 0, 2, 0)
-        self.channels_layout.setSpacing(6)
-        self.channels_scroll.setWidget(self.channels_wrap)
-        channels_row.addWidget(self.channels_scroll, 1)
-        root.addWidget(channels_frame)
-
         # -- splitter: árbol + contenido --
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -4204,6 +4137,55 @@ class VideoBrowserApp(QMainWindow):
         top_layout = QVBoxLayout(top_panel)
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(4)
+
+        # -- panel visual de recomendados + shorts --
+        self.reco_panel = QFrame()
+        self.reco_panel.setObjectName("detailFrame")
+        reco_layout = QVBoxLayout(self.reco_panel)
+        reco_layout.setContentsMargins(8, 6, 8, 6)
+        reco_layout.setSpacing(6)
+
+        self.lbl_reco_title = QLabel("Recomendados")
+        self.lbl_reco_title.setObjectName("detail")
+        reco_layout.addWidget(self.lbl_reco_title)
+
+        self.reco_list = QListWidget()
+        self.reco_list.setObjectName("recoList")
+        self.reco_list.setViewMode(QListView.ViewMode.IconMode)
+        self.reco_list.setFlow(QListView.Flow.LeftToRight)
+        self.reco_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self.reco_list.setMovement(QListView.Movement.Static)
+        self.reco_list.setWrapping(False)
+        self.reco_list.setSpacing(8)
+        self.reco_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.reco_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.reco_list.setIconSize(QSize(172, 96))
+        self.reco_list.setGridSize(QSize(190, 134))
+        self.reco_list.setMaximumHeight(150)
+        self.reco_list.itemClicked.connect(self._on_reco_item_clicked)
+        reco_layout.addWidget(self.reco_list)
+
+        self.lbl_shorts_title = QLabel("Shorts")
+        self.lbl_shorts_title.setObjectName("detail")
+        reco_layout.addWidget(self.lbl_shorts_title)
+
+        self.shorts_list = QListWidget()
+        self.shorts_list.setObjectName("recoList")
+        self.shorts_list.setViewMode(QListView.ViewMode.IconMode)
+        self.shorts_list.setFlow(QListView.Flow.LeftToRight)
+        self.shorts_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self.shorts_list.setMovement(QListView.Movement.Static)
+        self.shorts_list.setWrapping(False)
+        self.shorts_list.setSpacing(8)
+        self.shorts_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.shorts_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.shorts_list.setIconSize(QSize(112, 112))
+        self.shorts_list.setGridSize(QSize(132, 148))
+        self.shorts_list.setMaximumHeight(164)
+        self.shorts_list.itemClicked.connect(self._on_reco_item_clicked)
+        reco_layout.addWidget(self.shorts_list)
+
+        top_layout.addWidget(self.reco_panel)
 
         self.tabla = QTableWidget(0, 7)
         self.tabla.setHorizontalHeaderLabels(["", "Nombre", "Vistas", "Tiempo", "Peso", "✓", "#"])
@@ -6607,7 +6589,6 @@ class VideoBrowserApp(QMainWindow):
         self._cancel_tree_build()
         self.tree.clear()
         if not self.ruta_raiz:
-            self._refresh_channel_buttons()
             return
         root_has_dups = self._folder_has_duplicates(self.ruta_raiz)
         root_text = self.ruta_raiz.name + (" !" if root_has_dups else "")
@@ -6622,113 +6603,12 @@ class VideoBrowserApp(QMainWindow):
         self.tree.collapseAll()
         root.setExpanded(True)
         self.tree.setCurrentItem(root)
-        self._refresh_channel_buttons()
         self._tree_build_nodes = 1
         self._tree_build_queue.append((root, self.ruta_raiz, None, 0))
         self.statusBar().showMessage("Cargando estructura...", 0)
         self._process_tree_build_chunk()
         if self._tree_build_queue and self._tree_build_timer:
             self._tree_build_timer.start()
-
-    def _iter_tree_items(self):
-        if not hasattr(self, "tree"):
-            return
-        for i in range(self.tree.topLevelItemCount()):
-            stack = [self.tree.topLevelItem(i)]
-            while stack:
-                item = stack.pop()
-                if item is None:
-                    continue
-                yield item
-                for j in range(item.childCount() - 1, -1, -1):
-                    stack.append(item.child(j))
-
-    def _select_tree_item_by_path(self, folder_path: Path):
-        if not folder_path or not hasattr(self, "tree"):
-            return False
-        tgt = str(folder_path).replace('\\', '/').rstrip('/')
-        for item in self._iter_tree_items() or []:
-            ruta = item.data(0, Qt.ItemDataRole.UserRole)
-            if not ruta:
-                continue
-            item_norm = str(ruta).replace('\\', '/').rstrip('/')
-            if item_norm == tgt:
-                self.tree.setCurrentItem(item)
-                self.tree.scrollToItem(item)
-                return True
-        return False
-
-    def _on_channel_clicked(self, path_str: str):
-        if not path_str:
-            return
-        destino = Path(path_str)
-        if not destino.exists():
-            QMessageBox.information(self, "Canales", "La carpeta del canal ya no existe.")
-            self._refresh_channel_buttons()
-            return
-        if not self._select_tree_item_by_path(destino):
-            self.carpeta_actual = destino
-            self._start_folder_view_log(self.carpeta_actual)
-            self._refresh_list()
-        self._notify(f"Canal: {destino.name}", 1300)
-
-    def _highlight_active_channel(self):
-        if not self.channel_buttons:
-            return
-        actual = str(self.carpeta_actual).replace('\\', '/').rstrip('/') if self.carpeta_actual else ""
-        for path_str, btn in self.channel_buttons.items():
-            p_norm = str(path_str).replace('\\', '/').rstrip('/')
-            is_active = bool(actual and (actual == p_norm or actual.startswith(p_norm + '/')))
-            btn.setChecked(is_active)
-
-    def _refresh_channel_buttons(self):
-        if not hasattr(self, "channels_layout"):
-            return
-        while self.channels_layout.count():
-            item = self.channels_layout.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
-        self.channel_buttons = {}
-
-        if not self.ruta_raiz or not self.ruta_raiz.exists():
-            empty = QLabel("Sin canales")
-            empty.setObjectName("count")
-            self.channels_layout.addWidget(empty)
-            self.channels_layout.addStretch()
-            return
-
-        vetadas_lower = {v.lower() for v in self.carpetas_vetadas}
-        try:
-            dirs = [
-                d for d in self.ruta_raiz.iterdir()
-                if d.is_dir() and not d.name.startswith('.') and d.name.lower() not in vetadas_lower
-            ]
-        except (PermissionError, OSError):
-            dirs = []
-
-        def _views(path_obj: Path):
-            key = str(path_obj).replace('\\', '/').rstrip('/')
-            return int(self.folder_agg_cache.get(key, {}).get('total_vistas', 0))
-
-        dirs.sort(key=lambda d: (_views(d), d.name.lower()), reverse=True)
-
-        def _add_channel_button(label: str, p: Path):
-            btn = QPushButton(label)
-            btn.setObjectName("channelChip")
-            btn.setCheckable(True)
-            btn.clicked.connect(lambda _checked=False, pp=str(p): self._on_channel_clicked(pp))
-            self.channel_buttons[str(p)] = btn
-            self.channels_layout.addWidget(btn)
-
-        _add_channel_button("Inicio", self.ruta_raiz)
-        for d in dirs[:24]:
-            key = str(d).replace('\\', '/').rstrip('/')
-            total = int(self.folder_agg_cache.get(key, {}).get('total_videos', 0))
-            _add_channel_button(f"{d.name} ({total})", d)
-
-        self.channels_layout.addStretch()
-        self._highlight_active_channel()
 
     def _set_folder_stats(self, item, carpeta):
         # Usa solo la cache pre-agregada (construida una vez en _scan); evita
@@ -6813,7 +6693,6 @@ class VideoBrowserApp(QMainWindow):
             self.carpeta_actual = Path(ruta)
             self._start_folder_view_log(self.carpeta_actual)
             self._refresh_list()
-            self._highlight_active_channel()
 
     def _on_tree_double_click(self, item, _column):
         ruta = item.data(0, Qt.ItemDataRole.UserRole)
@@ -7437,6 +7316,7 @@ class VideoBrowserApp(QMainWindow):
         self.lbl_detail.setText("Selecciona un video para ver detalles y reproducir")
         if not self.carpeta_actual:
             self.lbl_folder.setText("Selecciona una carpeta en el panel izquierdo")
+            self._refresh_visual_recommendations([], {}, {})
             return
         try:
             exts = set(EXTENSIONES_VIDEO)
@@ -7573,6 +7453,7 @@ class VideoBrowserApp(QMainWindow):
 
         self.tabla.setSortingEnabled(True)
         self._apply_table_filter()
+        self._refresh_visual_recommendations(items, stats_map, thumbs_map)
         if sin_thumb and self.ffprobe_path:
             self._gen_thumbs(sin_thumb)
         # La sincronización de metadatos se ejecuta automáticamente junto al hash en background.
@@ -8024,6 +7905,135 @@ class VideoBrowserApp(QMainWindow):
         if m2:
             return int(m2.group(1))
         return 10**9
+
+    def _recommendation_candidates(self, kind: str, limit: int, stats_map: dict):
+        pool = self._recommendation_source_videos()
+        if not pool:
+            return []
+
+        def _stats(v):
+            return stats_map.get(str(v).replace('\\', '/'), {})
+
+        if kind == "favorites":
+            favs = [v for v in pool if v.name.lower().startswith("top ")]
+            favs.sort(key=lambda v: _stats(v).get('reproducciones', 0), reverse=True)
+            return favs[:limit]
+
+        if kind == "most_viewed":
+            top = sorted(pool, key=lambda v: _stats(v).get('reproducciones', 0), reverse=True)
+            return top[:limit]
+
+        if kind == "shorts":
+            shorts = sorted(pool, key=lambda v: self._duration_seconds_cached(v))
+            shorts = [v for v in shorts if self._duration_seconds_cached(v) <= 95] or shorts[: max(limit * 2, 24)]
+            return shorts[:limit]
+
+        unseen = [v for v in pool if not self._is_video_revisado(v)]
+        base = unseen or pool
+        base = sorted(base, key=lambda v: _stats(v).get('reproducciones', 0))
+        return base[:limit]
+
+    def _make_thumb_icon_for_video(self, ruta: Path, thumbs_map: dict, size: QSize):
+        ruta_norm = str(ruta).replace('\\', '/')
+        data = thumbs_map.get(ruta_norm)
+        if data:
+            pm = QPixmap()
+            pm.loadFromData(QByteArray(data))
+            if not pm.isNull():
+                return QIcon(pm.scaled(size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation))
+        return self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
+
+    def _populate_reco_list(self, widget: QListWidget, videos: list, thumbs_map: dict, *, shorts=False):
+        if not hasattr(self, "reco_list"):
+            return
+        widget.blockSignals(True)
+        widget.clear()
+        icon_size = widget.iconSize()
+        for v in videos:
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, str(v))
+            item.setIcon(self._make_thumb_icon_for_video(v, thumbs_map, icon_size))
+            if shorts:
+                item.setText(f"{v.stem[:18]}\n{self._duration_text(v)}")
+            else:
+                item.setText(v.stem[:26])
+            item.setToolTip(str(v))
+            widget.addItem(item)
+        widget.blockSignals(False)
+
+    def _refresh_visual_recommendations(self, items: list, stats_map: dict, thumbs_map: dict):
+        if not hasattr(self, "reco_list"):
+            return
+        if self.incluir_fotos_gestion:
+            self.reco_list.clear()
+            self.shorts_list.clear()
+            return
+
+        pool = self._recommendation_source_videos()
+        if not pool:
+            self.reco_list.clear()
+            self.shorts_list.clear()
+            return
+
+        full_stats = stats_map or self.db.obtener_stats_batch([str(v) for v in pool])
+
+        rec_for_you = self._recommendation_candidates("for_you", 8, full_stats)
+        rec_most = self._recommendation_candidates("most_viewed", 8, full_stats)
+        rec_fav = self._recommendation_candidates("favorites", 6, full_stats)
+
+        merged = []
+        seen = set()
+        for group in (rec_for_you, rec_most, rec_fav):
+            for v in group:
+                key = str(v)
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(v)
+                if len(merged) >= 14:
+                    break
+            if len(merged) >= 14:
+                break
+
+        shorts = self._recommendation_candidates("shorts", 14, full_stats)
+        needed = [str(v) for v in (merged + shorts)]
+        batch_thumbs = thumbs_map or {}
+        missing = [r for r in needed if r.replace('\\', '/') not in batch_thumbs]
+        if missing:
+            try:
+                batch_thumbs = dict(batch_thumbs)
+                batch_thumbs.update(self.db.obtener_miniaturas_batch(missing))
+            except Exception:
+                pass
+
+        self._populate_reco_list(self.reco_list, merged, batch_thumbs, shorts=False)
+        self._populate_reco_list(self.shorts_list, shorts, batch_thumbs, shorts=True)
+
+    def _on_reco_item_clicked(self, item: QListWidgetItem):
+        if not item:
+            return
+        ruta = item.data(Qt.ItemDataRole.UserRole)
+        if not ruta:
+            return
+        p = Path(ruta)
+        if not p.exists():
+            self._notify("El vídeo recomendado ya no existe", 1800)
+            self._refresh_list()
+            return
+        self.forzar_guardado_tiempo_actual()
+        self.video_elegido = p
+        self._select_table_row_for_path(p)
+        self._reproducir_elegido()
+
+    def _select_table_row_for_path(self, ruta: Path):
+        target = str(ruta)
+        for r in range(self.tabla.rowCount()):
+            it = self.tabla.item(r, 0)
+            if it and it.data(Qt.ItemDataRole.UserRole) == target:
+                self.tabla.setCurrentCell(r, 0)
+                self.tabla.scrollToItem(it)
+                return True
+        return False
 
     def _play_recommendation(self, kind: str):
         pool = self._recommendation_source_videos()
