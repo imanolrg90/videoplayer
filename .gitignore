@@ -1,0 +1,40 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+.venv311/
+venv/
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Local runtime/log data
+LOG/
+*.log
+
+# Databases and transient recovery/corrupt files
+*.db
+*.db-*
+*.db.corrupt
+*.db.recovering
+*.db.recovering-journal
+*.corrupt
+*.recovering
+*.bak
+
+# Model/cache binaries and temp
+.tmp_wheels/
+thumb_cache/
+models/*.onnx
+models/*.caffemodel
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/

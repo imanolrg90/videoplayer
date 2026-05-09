@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Abrearch Flask</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand">
+        <h1>ABREARCH FLASK</h1>
+        <p>Raspberry + carpeta compartida</p>
+      </div>
+      <div class="top-actions">
+        <input id="searchInput" type="search" placeholder="Buscar en carpeta actual..." />
+        <button id="refreshBtn">Refrescar</button>
+        <button id="logBtn">Log</button>
+        <button id="logoutBtn">Salir</button>
+      </div>
+    </header>
+
+    <section class="filters">
+      <button id="filterAll" class="filter-btn active">Todos</button>
+      <button id="filterFav" class="filter-btn">Favoritos</button>
+      <button id="filterUnseen" class="filter-btn">Sin revisar</button>
+      <button id="filterSeen" class="filter-btn">- Vistos</button>
+      <button id="filterMostViews" class="filter-btn">+ Vistos</button>
+      <button id="filterMostTime" class="filter-btn">+ Tiempo</button>
+      <button id="filterHeavy" class="filter-btn">Pesados</button>
+      <label class="recursive-opt">
+        <input id="recursiveToggle" type="checkbox" checked />
+        Incluir subcarpetas
+      </label>
+    </section>
+
+    <section class="explorer">
+      <aside class="tree-panel">
+        <div class="panel-title">Carpetas</div>
+        <div id="folderTree" class="folder-tree"></div>
+      </aside>
+
+      <section class="content-panel">
+        <div class="content-top">
+          <div class="table-head">
+            <span>Nombre</span>
+            <span>Vistas</span>
+            <span>Tiempo</span>
+            <span>MB</span>
+            <span>Visto</span>
+            <span>Fav</span>
+            <span>#</span>
+          </div>
+          <div id="videoTable" class="video-table"></div>
+        </div>
+
+        <div class="content-bottom">
+          <div class="player-box">
+            <h2 id="selectedTitle">Selecciona un video</h2>
+            <video id="videoPlayer" controls playsinline preload="metadata"></video>
+            <p id="selectedMeta" class="meta"></p>
+          </div>
+          <div class="actions-box">
+            <button id="playBtn" class="state-btn" disabled>Reproducir</button>
+            <button id="favBtn" class="state-btn" disabled>Favorito</button>
+            <button id="watchedBtn" class="state-btn" disabled>Marcar visto</button>
+            <div class="counter">Videos: <span id="countBadge">0</span></div>
+            <div id="statusLine" class="status-line"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div id="logModal" class="log-modal hidden">
+    <div class="log-dialog">
+      <div class="log-header">
+        <h3>Log del programa</h3>
+        <button id="closeLogBtn">Cerrar</button>
+      </div>
+      <pre id="logContent" class="log-content"></pre>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

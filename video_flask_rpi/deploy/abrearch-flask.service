@@ -1,0 +1,17 @@
+[Unit]
+Description=Abrearch Flask Video Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/abrearch-flask
+EnvironmentFile=/opt/abrearch-flask/.env
+ExecStart=/opt/abrearch-flask/.venv/bin/waitress-serve --host=0.0.0.0 --port=8080 app:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

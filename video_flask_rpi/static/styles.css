@@ -1,0 +1,74 @@
+:root {
+  --line: #2f3a4a;
+  --line-soft: #273140;
+  --text: #e7edf7;
+  --muted: #9baac2;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(circle at top right, #1a2e54 0%, #0f131a 45%), #0f131a; color: var(--text); font-family: system-ui, sans-serif; }
+.page { width: min(1400px, 96vw); margin: 0 auto; padding: 0.9rem 0 1rem; }
+.topbar { display: grid; grid-template-columns: 1fr 2fr; gap: 0.7rem; margin-bottom: 0.65rem; }
+.brand, .top-actions, .tree-panel, .content-top, .content-bottom { border: 1px solid var(--line); background: linear-gradient(180deg, #191f2a, #141b25); border-radius: 10px; }
+.brand { padding: 0.7rem 0.9rem; }
+.brand h1 { margin:0; font-size:1.2rem; }
+.brand p { margin:.15rem 0 0; color:var(--muted); font-size:.86rem; }
+.top-actions { padding:0.6rem; display:grid; grid-template-columns: 1fr auto auto auto; gap: .5rem; }
+input[type="search"] { width:100%; border:1px solid var(--line-soft); background:#101723; color:var(--text); border-radius:8px; padding:.62rem .72rem; font-size:.92rem; }
+button { border:1px solid #355375; border-radius:8px; padding:.58rem .72rem; background:linear-gradient(180deg, #2b3f59, #25354b); color:#e7f0ff; font-weight:600; cursor:pointer; }
+.filters { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; margin-bottom:.65rem; }
+.filter-btn { border-color:#37465d; background:#1a2331; }
+.filter-btn.active { background:linear-gradient(180deg, #3872bb, #315f98); border-color:#5d9be8; }
+.recursive-opt { margin-left:auto; color:var(--muted); font-size:.85rem; display:flex; align-items:center; gap:.35rem; }
+.explorer { display:grid; grid-template-columns:320px 1fr; gap:.72rem; height:calc(100vh - 170px); min-height:560px; }
+.tree-panel { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+.panel-title { padding:.58rem .72rem; border-bottom:1px solid var(--line-soft); font-weight:600; font-size:.9rem; }
+.folder-tree { flex:1; overflow:auto; padding:.35rem; }
+.folder-item { border:1px solid transparent; border-radius:8px; padding:.37rem .48rem; margin-bottom:.2rem; color:#dbe7fa; display:flex; align-items:center; justify-content:space-between; gap:.35rem; cursor:pointer; }
+.folder-item:hover { background:#212b3a; border-color:#2f4058; }
+.folder-item.active { background:linear-gradient(180deg, #2c4260, #243852); border-color:#5a88bd; }
+.folder-left { display:flex; align-items:center; gap:.5rem; min-width:0; }
+.folder-thumb { width:42px; height:28px; border-radius:6px; border:1px solid #3a4b63; object-fit:cover; background:#0d121a; }
+.folder-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:.88rem; }
+.folder-count { color:var(--muted); font-size:.75rem; }
+.content-panel { display:grid; gap:.72rem; grid-template-rows:1fr 48%; min-height:0; }
+.content-top { display:flex; flex-direction:column; min-height:0; }
+.table-head { display:grid; grid-template-columns:1fr 86px 86px 92px 74px 74px 64px; padding:.56rem .72rem; border-bottom:1px solid var(--line-soft); color:#b8c6dc; font-size:.8rem; font-weight:600; }
+.video-table { overflow:auto; padding:.24rem; }
+.video-row { display:grid; grid-template-columns:1fr 86px 86px 92px 74px 74px 64px; align-items:center; gap:.35rem; border:1px solid transparent; border-radius:8px; padding:.43rem .55rem; cursor:pointer; font-size:.88rem; }
+.video-row:hover { background:#202a39; border-color:#2d3f57; }
+.video-row.active { background:linear-gradient(180deg, #2f4868, #273d5a); border-color:#5f91cc; }
+.video-main { display:flex; align-items:center; gap:.56rem; min-width:0; }
+.video-thumb { width:74px; height:42px; border-radius:6px; border:1px solid #3a4b63; object-fit:cover; background:#0d121a; }
+.video-main-text { display:grid; gap:.08rem; min-width:0; }
+.video-name, .video-path { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.video-name { font-weight:600; }
+.video-path { color:var(--muted); font-size:.76rem; }
+.chip { justify-self:start; padding:.15rem .42rem; border-radius:999px; font-size:.75rem; border:1px solid #3a4b63; background:#1a2433; }
+.chip.on { border-color:#5995da; background:#1f3755; }
+.chip.hash-ok { border-color:#4f8f66; background:#1e3a2a; color:#ccefd8; }
+.chip.hash-miss { border-color:#6e4850; background:#332028; color:#f2c9ce; }
+.content-bottom { display:grid; grid-template-columns:1fr 210px; gap:.65rem; padding:.62rem; }
+#videoPlayer { width:100%; max-height:34vh; border-radius:10px; margin-top:.35rem; background:#050708; }
+.meta { color:var(--muted); margin:.35rem 0 0; font-size:.82rem; }
+.actions-box { display:flex; flex-direction:column; gap:.6rem; }
+.state-btn { width:100%; }
+.state-btn.active { background:linear-gradient(180deg, #3f7ac4, #3566a2); border-color:#67a1e9; }
+.state-btn:disabled { opacity:.6; cursor:not-allowed; }
+.counter, .status-line { color:var(--muted); font-size:.82rem; }
+.empty { color:var(--muted); text-align:center; padding:1rem; }
+.log-modal { position:fixed; inset:0; background:rgba(6,10,14,.72); display:grid; place-items:center; z-index:50; }
+.log-modal.hidden { display:none; }
+.log-dialog { width:min(1000px,94vw); height:min(76vh,760px); border-radius:12px; border:1px solid var(--line); background:linear-gradient(180deg,#1a2230,#141b26); display:grid; grid-template-rows:auto 1fr; }
+.log-header { display:flex; align-items:center; justify-content:space-between; padding:.62rem .74rem; border-bottom:1px solid var(--line-soft); }
+.log-content { margin:0; padding:.7rem; overflow:auto; white-space:pre-wrap; word-break:break-word; color:#dce6f8; font-size:.82rem; line-height:1.4; }
+@media (max-width: 740px) {
+  .topbar { grid-template-columns:1fr; }
+  .top-actions { grid-template-columns:1fr 1fr; }
+  .recursive-opt { margin-left:0; }
+  .explorer { grid-template-columns:1fr; height:auto; min-height:unset; }
+  .tree-panel { max-height:28vh; }
+  .content-panel { grid-template-rows:auto auto; }
+  .table-head, .video-row { grid-template-columns:1fr 64px 64px 72px 56px 56px 48px; }
+  .content-bottom { grid-template-columns:1fr; }
+  #videoPlayer { max-height:26vh; }
+}

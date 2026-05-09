@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - Abrearch Flask</title>
+  <style>
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#0f131a; color:#e7edf7; font-family:system-ui, sans-serif; }
+    .card { width:min(420px,92vw); border:1px solid #2f3a4a; background:#181e28; border-radius:12px; padding:1rem; }
+    h1 { margin:0 0 .8rem; font-size:1.2rem; }
+    input { width:100%; margin:.35rem 0; padding:.7rem; border-radius:8px; border:1px solid #334359; background:#111926; color:#e7edf7; }
+    button { width:100%; margin-top:.5rem; padding:.7rem; border-radius:8px; border:1px solid #47648a; background:#2f4868; color:#fff; cursor:pointer; }
+    .err { min-height:1.2rem; color:#f2b8b5; font-size:.9rem; margin-top:.45rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Abrearch Flask</h1>
+    <input id="username" type="text" placeholder="Usuario" />
+    <input id="password" type="password" placeholder="Contrasena" />
+    <button id="loginBtn">Entrar</button>
+    <div id="error" class="err"></div>
+  </div>
+
+  <script>
+    const user = document.getElementById('username');
+    const pass = document.getElementById('password');
+    const err = document.getElementById('error');
+
+    async function login() {
+      err.textContent = '';
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.value.trim(), password: pass.value.trim() })
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        err.textContent = body.detail || 'No se pudo iniciar sesion';
+        return;
+      }
+
+      window.location.href = '/';
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', () => login().catch((e) => {
+      err.textContent = e.message || String(e);
+    }));
+
+    pass.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        login().catch((x) => {
+          err.textContent = x.message || String(x);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
