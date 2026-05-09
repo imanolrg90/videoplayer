@@ -4138,7 +4138,7 @@ class VideoBrowserApp(QMainWindow):
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(4)
 
-        # -- panel visual de recomendados + shorts --
+        # -- panel visual de recomendados --
         self.reco_panel = QFrame()
         self.reco_panel.setObjectName("detailFrame")
         reco_layout = QVBoxLayout(self.reco_panel)
@@ -4164,26 +4164,6 @@ class VideoBrowserApp(QMainWindow):
         self.reco_list.setMaximumHeight(150)
         self.reco_list.itemClicked.connect(self._on_reco_item_clicked)
         reco_layout.addWidget(self.reco_list)
-
-        self.lbl_shorts_title = QLabel("Shorts")
-        self.lbl_shorts_title.setObjectName("detail")
-        reco_layout.addWidget(self.lbl_shorts_title)
-
-        self.shorts_list = QListWidget()
-        self.shorts_list.setObjectName("recoList")
-        self.shorts_list.setViewMode(QListView.ViewMode.IconMode)
-        self.shorts_list.setFlow(QListView.Flow.LeftToRight)
-        self.shorts_list.setResizeMode(QListView.ResizeMode.Adjust)
-        self.shorts_list.setMovement(QListView.Movement.Static)
-        self.shorts_list.setWrapping(False)
-        self.shorts_list.setSpacing(8)
-        self.shorts_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.shorts_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.shorts_list.setIconSize(QSize(112, 112))
-        self.shorts_list.setGridSize(QSize(132, 148))
-        self.shorts_list.setMaximumHeight(164)
-        self.shorts_list.itemClicked.connect(self._on_reco_item_clicked)
-        reco_layout.addWidget(self.shorts_list)
 
         top_layout.addWidget(self.reco_panel)
 
@@ -7966,13 +7946,11 @@ class VideoBrowserApp(QMainWindow):
             return
         if self.incluir_fotos_gestion:
             self.reco_list.clear()
-            self.shorts_list.clear()
             return
 
         pool = self._recommendation_source_videos()
         if not pool:
             self.reco_list.clear()
-            self.shorts_list.clear()
             return
 
         full_stats = stats_map or self.db.obtener_stats_batch([str(v) for v in pool])
@@ -7995,8 +7973,7 @@ class VideoBrowserApp(QMainWindow):
             if len(merged) >= 14:
                 break
 
-        shorts = self._recommendation_candidates("shorts", 14, full_stats)
-        needed = [str(v) for v in (merged + shorts)]
+        needed = [str(v) for v in merged]
         batch_thumbs = thumbs_map or {}
         missing = [r for r in needed if r.replace('\\', '/') not in batch_thumbs]
         if missing:
@@ -8007,7 +7984,6 @@ class VideoBrowserApp(QMainWindow):
                 pass
 
         self._populate_reco_list(self.reco_list, merged, batch_thumbs, shorts=False)
-        self._populate_reco_list(self.shorts_list, shorts, batch_thumbs, shorts=True)
 
     def _on_reco_item_clicked(self, item: QListWidgetItem):
         if not item:
