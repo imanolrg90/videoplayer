@@ -16,6 +16,7 @@
       <div class="top-actions">
         <input id="searchInput" type="search" placeholder="Buscar en carpeta actual..." />
         <span id="pendingBadge" class="pending-badge" title="Operaciones diferidas pendientes">Pendientes: 0</span>
+        <button id="privacyBtn">Privacidad</button>
         <button id="refreshBtn">Refrescar</button>
         <button id="logBtn">Log</button>
         <button id="logoutBtn">Salir</button>
@@ -60,10 +61,20 @@
           <div class="player-box">
             <h2 id="selectedTitle">Selecciona un video</h2>
             <video id="videoPlayer" controls playsinline preload="metadata"></video>
+            <div id="fsOverlay" class="fs-overlay hidden">
+              <button id="fsFavBtn" class="state-btn">Favorito</button>
+              <button id="fsDeleteBtn" class="state-btn">Eliminar</button>
+              <button id="fsNextBtn" class="state-btn">Siguiente</button>
+              <span id="fsTimeLabel" class="fs-time">00:00 / 00:00</span>
+              <input id="fsSeekSlider" type="range" min="0" max="0" step="0.1" value="0" />
+              <span class="fs-vol">Vol</span>
+              <input id="fsVolumeSlider" type="range" min="0" max="100" step="1" value="100" />
+            </div>
             <p id="selectedMeta" class="meta"></p>
           </div>
           <div class="actions-box">
             <button id="playBtn" class="state-btn" disabled>Reproducir</button>
+            <button id="fullscreenBtn" class="state-btn">Pantalla completa</button>
             <button id="prevBtn" class="state-btn" disabled>Anterior</button>
             <button id="nextBtn" class="state-btn" disabled>Siguiente</button>
             <button id="randomBtn" class="state-btn">Aleatorio</button>
@@ -97,6 +108,18 @@
         <strong id="logFileName">-</strong>
       </div>
       <textarea id="logContent" class="log-content log-edit" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div id="privacyOverlay" class="privacy-overlay hidden">
+    <div class="privacy-dialog">
+      <h3>Modo privacidad</h3>
+      <p>Aplicación bloqueada. Introduce contraseña para desbloquear.</p>
+      <input id="privacyPassword" type="password" placeholder="Contraseña" />
+      <div class="privacy-actions">
+        <button id="privacyUnlockBtn">Desbloquear</button>
+      </div>
+      <div id="privacyError" class="privacy-error"></div>
     </div>
   </div>
 

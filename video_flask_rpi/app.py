@@ -27,6 +27,7 @@ THUMB_CACHE_DIR = (Path(__file__).resolve().parent / "thumb_cache").resolve()
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "/usr/bin/ffmpeg").strip()
 APP_USERNAME = os.getenv("APP_USERNAME", "admin")
 APP_PASSWORD = os.getenv("APP_PASSWORD", "change-this-password")
+PRIVACY_UNLOCK_PASSWORD = os.getenv("PRIVACY_UNLOCK_PASSWORD", "0000")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "change-this-secret")
@@ -739,6 +740,16 @@ def defer_delete_api():
 @auth_required
 def pending_summary_api():
     return jsonify({"ok": True, "counts": get_pending_counts()})
+
+
+@app.post("/api/privacy/unlock")
+@auth_required
+def privacy_unlock_api():
+    data = request.get_json(silent=True) or {}
+    password = str(data.get("password", ""))
+    if password != PRIVACY_UNLOCK_PASSWORD:
+        return jsonify({"detail": "Contraseña incorrecta"}), 401
+    return jsonify({"ok": True})
 
 
 @app.get("/api/log")

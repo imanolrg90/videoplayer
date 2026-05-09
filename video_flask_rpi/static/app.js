@@ -4,6 +4,7 @@ const recursiveToggle = document.getElementById("recursiveToggle");
 const logBtn = document.getElementById("logBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const pendingBadge = document.getElementById("pendingBadge");
+const privacyBtn = document.getElementById("privacyBtn");
 
 const filterAll = document.getElementById("filterAll");
 const filterFav = document.getElementById("filterFav");
@@ -18,11 +19,20 @@ const videoTable = document.getElementById("videoTable");
 const countBadge = document.getElementById("countBadge");
 
 const videoPlayer = document.getElementById("videoPlayer");
+const playerBox = document.querySelector(".player-box");
 const selectedTitle = document.getElementById("selectedTitle");
 const selectedMeta = document.getElementById("selectedMeta");
 const statusLine = document.getElementById("statusLine");
+const fsOverlay = document.getElementById("fsOverlay");
+const fsFavBtn = document.getElementById("fsFavBtn");
+const fsDeleteBtn = document.getElementById("fsDeleteBtn");
+const fsNextBtn = document.getElementById("fsNextBtn");
+const fsTimeLabel = document.getElementById("fsTimeLabel");
+const fsSeekSlider = document.getElementById("fsSeekSlider");
+const fsVolumeSlider = document.getElementById("fsVolumeSlider");
 
 const playBtn = document.getElementById("playBtn");
+const fullscreenBtn = document.getElementById("fullscreenBtn");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const randomBtn = document.getElementById("randomBtn");
@@ -37,6 +47,10 @@ const logContent = document.getElementById("logContent");
 const closeLogBtn = document.getElementById("closeLogBtn");
 const saveLogBtn = document.getElementById("saveLogBtn");
 const logFileName = document.getElementById("logFileName");
+const privacyOverlay = document.getElementById("privacyOverlay");
+const privacyPassword = document.getElementById("privacyPassword");
+const privacyUnlockBtn = document.getElementById("privacyUnlockBtn");
+const privacyError = document.getElementById("privacyError");
 
 let folders = [];
 let allVideos = [];
@@ -45,6 +59,76 @@ let selectedVideo = null;
 let currentFilter = "all";
 let filteredVideos = [];
 let repeatEnabled = false;
+let privacyLocked = false;
+let fsHideTimer = null;
+
+function formatTime(value) {
+  const sec = Math.max(0, Math.floor(Number(value || 0)));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function syncFullscreenOverlay() {
+  const current = Number(videoPlayer.currentTime || 0);
+  const duration = Number(videoPlayer.duration || 0);
+  fsSeekSlider.max = String(duration > 0 ? duration : 0);
+  fsSeekSlider.value = String(Math.min(current, duration || current));
+  fsTimeLabel.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+  fsVolumeSlider.value = String(Math.round((videoPlayer.volume || 0) * 100));
+}
+
+function isInFullscreen() {
+  return document.fullscreenElement === playerBox;
+}
+
+function showFsOverlayTemporarily() {
+  if (!isInFullscreen()) {
+    fsOverlay.classList.add("hidden");
+    return;
+  }
+  fsOverlay.classList.remove("hidden");
+  if (fsHideTimer) clearTimeout(fsHideTimer);
+  fsHideTimer = setTimeout(() => {
+    fsOverlay.classList.add("hidden");
+  }, 1700);
+}
+
+async function toggleFullscreen() {
+  if (!playerBox) return;
+  if (isInFullscreen()) {
+    await document.exitFullscreen().catch(() => {});
+  } else {
+    await playerBox.requestFullscreen().catch(() => {});
+  }
+}
+
+function lockPrivacy() {
+  privacyLocked = true;
+  document.body.classList.add("privacy-locked");
+  privacyOverlay.classList.remove("hidden");
+  privacyError.textContent = "";
+  privacyPassword.value = "";
+  videoPlayer.pause();
+  setTimeout(() => privacyPassword.focus(), 0);
+}
+
+async function unlockPrivacy() {
+  try {
+    const password = privacyPassword.value || "";
+    await apiPostJson("/api/privacy/unlock", { password });
+    privacyLocked = false;
+    document.body.classList.remove("privacy-locked");
+    privacyOverlay.classList.add("hidden");
+    privacyError.textContent = "";
+    privacyPassword.value = "";
+    setStatus("Privacidad desactivada");
+  } catch (err) {
+    privacyError.textContent = err.message || "Contraseña incorrecta";
+    privacyPassword.select();
+    privacyPassword.focus();
+  }
+}
 
 function setStatus(text) {
   statusLine.textContent = text || "";
@@ -285,6 +369,8 @@ function updateSelectionUi() {
     repeatBtn.textContent = `Repeat: ${repeatEnabled ? "ON" : "OFF"}`;
     muteBtn.classList.toggle("active", videoPlayer.muted);
     muteBtn.textContent = `Mute: ${videoPlayer.muted ? "ON" : "OFF"}`;
+    fullscreenBtn.textContent = isInFullscreen() ? "Salir pantalla completa" : "Pantalla completa";
+    syncFullscreenOverlay();
     return;
   }
 
@@ -298,6 +384,9 @@ function updateSelectionUi() {
   repeatBtn.textContent = `Repeat: ${repeatEnabled ? "ON" : "OFF"}`;
   muteBtn.classList.toggle("active", videoPlayer.muted);
   muteBtn.textContent = `Mute: ${videoPlayer.muted ? "ON" : "OFF"}`;
+  fullscreenBtn.textContent = isInFullscreen() ? "Salir pantalla completa" : "Pantalla completa";
+  fsFavBtn.textContent = selectedVideo.favorite ? "Quitar favorito" : "Favorito";
+  syncFullscreenOverlay();
 }
 
 function playSelected() {
@@ -452,6 +541,7 @@ filterMostTime.addEventListener("click", () => setFilter("most_time"));
 filterHeavy.addEventListener("click", () => setFilter("heavy"));
 
 playBtn.addEventListener("click", () => playSelected());
+fullscreenBtn.addEventListener("click", () => toggleFullscreen().catch(showError));
 prevBtn.addEventListener("click", () => playPrevInList());
 nextBtn.addEventListener("click", () => playNextInList());
 randomBtn.addEventListener("click", () => playRandomFromList());
@@ -469,6 +559,34 @@ muteBtn.addEventListener("click", () => {
 volumeSlider.addEventListener("input", () => {
   const v = Number(volumeSlider.value || 100);
   videoPlayer.volume = Math.max(0, Math.min(1, v / 100));
+  fsVolumeSlider.value = String(v);
+});
+
+fsFavBtn.addEventListener("click", () => {
+  if (!selectedVideo) return;
+  updateSelectedState({ favorite: !selectedVideo.favorite }).catch(showError);
+});
+fsDeleteBtn.addEventListener("click", () => {
+  if (!selectedVideo) return;
+  queueDeleteSelected().catch(showError);
+});
+fsNextBtn.addEventListener("click", () => playNextInList());
+fsSeekSlider.addEventListener("input", () => {
+  videoPlayer.currentTime = Number(fsSeekSlider.value || 0);
+  syncFullscreenOverlay();
+});
+fsVolumeSlider.addEventListener("input", () => {
+  const v = Number(fsVolumeSlider.value || 100);
+  videoPlayer.volume = Math.max(0, Math.min(1, v / 100));
+  volumeSlider.value = String(v);
+});
+
+playerBox.addEventListener("mousemove", () => showFsOverlayTemporarily());
+playerBox.addEventListener("mousedown", () => showFsOverlayTemporarily());
+document.addEventListener("fullscreenchange", () => {
+  fullscreenBtn.textContent = isInFullscreen() ? "Salir pantalla completa" : "Pantalla completa";
+  showFsOverlayTemporarily();
+  syncFullscreenOverlay();
 });
 
 videoPlayer.addEventListener("ended", () => {
@@ -478,6 +596,24 @@ videoPlayer.addEventListener("ended", () => {
     return;
   }
   playNextInList();
+});
+videoPlayer.addEventListener("timeupdate", () => syncFullscreenOverlay());
+videoPlayer.addEventListener("loadedmetadata", () => syncFullscreenOverlay());
+
+privacyBtn.addEventListener("click", () => {
+  if (privacyLocked) {
+    privacyPassword.focus();
+    privacyPassword.select();
+    return;
+  }
+  lockPrivacy();
+});
+privacyUnlockBtn.addEventListener("click", () => unlockPrivacy().catch(showError));
+privacyPassword.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    unlockPrivacy().catch(showError);
+  }
 });
 
 logBtn.addEventListener("click", () => openLogModal().catch(showError));
@@ -493,6 +629,14 @@ logoutBtn.addEventListener("click", async () => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (privacyLocked) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      unlockPrivacy().catch(showError);
+    }
+    return;
+  }
+
   const tag = (event.target && event.target.tagName) ? event.target.tagName.toLowerCase() : "";
   const inText = tag === "input" || tag === "textarea";
 
@@ -541,6 +685,12 @@ document.addEventListener("keydown", (event) => {
     const v = Math.max(0, Number(volumeSlider.value || 100) - 10);
     volumeSlider.value = String(v);
     videoPlayer.volume = v / 100;
+  } else if (event.key === "F11") {
+    event.preventDefault();
+    toggleFullscreen().catch(showError);
+  } else if (event.key === "Escape" && isInFullscreen()) {
+    event.preventDefault();
+    document.exitFullscreen().catch(() => {});
   }
 });
 
