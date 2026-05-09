@@ -504,6 +504,29 @@ def folder_views_today_path() -> Path:
     return FOLDER_VIEWS_LOG_DIR / filename
 
 
+def resolve_writable_folder_views_today_path() -> tuple[Path, bool]:
+    """Return a writable daily folder-views log path.
+
+    Tries configured path first, then a local app fallback to avoid hard failures
+    when mounted/shared paths are temporarily unavailable or permission-restricted.
+    """
+    primary = folder_views_today_path()
+    fallback = (Path(__file__).resolve().parent / "LOG" / primary.name).resolve()
+    errors: list[str] = []
+
+    for idx, candidate in enumerate((primary, fallback)):
+        try:
+            candidate.parent.mkdir(parents=True, exist_ok=True)
+            # Open in append mode to validate write access without truncating.
+            with open(candidate, "a", encoding="utf-8"):
+                pass
+            return candidate, bool(idx == 1)
+        except OSError as exc:
+            errors.append(f"{candidate}: {exc}")
+
+    raise OSError("; ".join(errors) if errors else "No writable folder-views path")
+
+
 @app.get("/")
 def index():
     if not session.get("logged_in"):
@@ -774,10 +797,10 @@ def log_api():
 @app.get("/api/log/folder-views/today")
 @auth_required
 def folder_views_today_api():
-    path = folder_views_today_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        path.write_text("", encoding="utf-8")
+    try:
+        path, using_fallback = resolve_writable_folder_views_today_path()
+    except OSError as exc:
+        return jsonify({"detail": f"No se pudo preparar el log diario: {exc}"}), 500
 
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -789,6 +812,7 @@ def folder_views_today_api():
             "ok": True,
             "file_name": path.name,
             "file_path": str(path),
+            "using_fallback": using_fallback,
             "content": text,
         }
     )
@@ -797,8 +821,10 @@ def folder_views_today_api():
 @app.post("/api/log/folder-views/today")
 @auth_required
 def save_folder_views_today_api():
-    path = folder_views_today_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path, using_fallback = resolve_writable_folder_views_today_path()
+    except OSError as exc:
+        return jsonify({"detail": f"No se pudo preparar el log diario: {exc}"}), 500
 
     data = request.get_json(silent=True) or {}
     content = data.get("content", "")
@@ -810,8 +836,20 @@ def save_folder_views_today_api():
     except OSError as exc:
         return jsonify({"detail": f"No se pudo guardar el log diario: {exc}"}), 500
 
-    LOGGER.info("API /log/folder-views/today saved file=%s bytes=%d", path.name, len(content.encode("utf-8")))
-    return jsonify({"ok": True, "file_name": path.name, "file_path": str(path)})
+    LOGGER.info(
+        "API /log/folder-views/today saved file=%s bytes=%d fallback=%s",
+        path.name,
+        len(content.encode("utf-8")),
+        using_fallback,
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "file_name": path.name,
+            "file_path": str(path),
+            "using_fallback": using_fallback,
+        }
+    )
 
 
 if __name__ == "__main__":
