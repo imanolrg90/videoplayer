@@ -490,6 +490,19 @@ function setFilter(filter) {
   renderVideos();
 }
 
+function setFilterAndPlayRandom(filter) {
+  setFilter(filter);
+  if (!filteredVideos.length) {
+    selectedVideo = null;
+    updateSelectionUi();
+    setStatus("No hay videos en este filtro.");
+    return;
+  }
+  const i = Math.floor(Math.random() * filteredVideos.length);
+  pickAndRender(filteredVideos[i]);
+  playSelected();
+}
+
 async function openLogModal() {
   logModal.classList.remove("hidden");
   logContent.value = "Cargando log diario...";
@@ -532,13 +545,13 @@ recursiveToggle.addEventListener("change", () => {
   loadVideos().catch(showError);
 });
 
-filterAll.addEventListener("click", () => setFilter("all"));
-filterFav.addEventListener("click", () => setFilter("fav"));
-filterUnseen.addEventListener("click", () => setFilter("unseen"));
-filterSeen.addEventListener("click", () => setFilter("seen"));
-filterMostViews.addEventListener("click", () => setFilter("most_views"));
-filterMostTime.addEventListener("click", () => setFilter("most_time"));
-filterHeavy.addEventListener("click", () => setFilter("heavy"));
+filterAll.addEventListener("click", () => setFilterAndPlayRandom("all"));
+filterFav.addEventListener("click", () => setFilterAndPlayRandom("fav"));
+filterUnseen.addEventListener("click", () => setFilterAndPlayRandom("unseen"));
+filterSeen.addEventListener("click", () => setFilterAndPlayRandom("seen"));
+filterMostViews.addEventListener("click", () => setFilterAndPlayRandom("most_views"));
+filterMostTime.addEventListener("click", () => setFilterAndPlayRandom("most_time"));
+filterHeavy.addEventListener("click", () => setFilterAndPlayRandom("heavy"));
 
 playBtn.addEventListener("click", () => playSelected());
 fullscreenBtn.addEventListener("click", () => toggleFullscreen().catch(showError));
