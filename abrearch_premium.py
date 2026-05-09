@@ -4157,15 +4157,17 @@ class VideoBrowserApp(QMainWindow):
         self.tree.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.tree.setHeaderLabels(["", "Carpeta", "Vistas", "Tiempo", "Peso", "% Rev", "% Hash", "Mini"])
         self.tree.setIndentation(16)
-        self.tree.setIconSize(QSize(FOLDER_TREE_ICON_SIZE, FOLDER_TREE_ICON_SIZE))
+        self.tree.setIconSize(QSize(52, 52))
         self.tree.header().setStretchLastSection(False)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tree.setColumnWidth(0, FOLDER_TREE_ICON_SIZE + 44)
-        for c in (2, 3, 4, 5, 6, 7):
+        self.tree.header().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        self.tree.setColumnWidth(0, 84)
+        for c in (2, 3, 4, 5, 7):
             self.tree.header().setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
             self.tree.setColumnHidden(c, True)
-        self.tree.setHeaderHidden(True)
+        self.tree.setColumnHidden(6, False)
+        self.tree.setHeaderHidden(False)
         self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.tree.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.tree.currentItemChanged.connect(self._on_tree_select)
@@ -4720,8 +4722,15 @@ class VideoBrowserApp(QMainWindow):
         btn_h = getattr(self, "btn_hamburger", None)
         if tree is None:
             return
-        # Anchura aprox de un sidebar tipo YouTube
-        w = max(360, min(560, int(self.width() * 0.36)))
+        # Recalcular anchos visibles para que % Hash entre sin scroll horizontal.
+        try:
+            tree.resizeColumnToContents(6)
+        except Exception:
+            pass
+        icon_w = max(74, tree.iconSize().width() + 24)
+        tree.setColumnWidth(0, icon_w)
+        hash_w = max(94, tree.columnWidth(6) + 18)
+        tree.setColumnWidth(6, hash_w)
         # Posicionar bajo el botón hamburguesa
         x = 12
         y = 60
@@ -4734,8 +4743,13 @@ class VideoBrowserApp(QMainWindow):
                 pass
         try:
             screen_geo = btn_h.screen().availableGeometry() if btn_h is not None and btn_h.screen() is not None else QApplication.primaryScreen().availableGeometry()
+            # Nombre de carpeta + icono + hash con margen.
+            w_min = icon_w + hash_w + 260
+            w = max(w_min, min(760, int(screen_geo.width() * 0.45)))
+            w = min(w, max(320, screen_geo.width() - 24))
             h = max(200, screen_geo.bottom() - y - 20)
         except Exception:
+            w = max(icon_w + hash_w + 240, min(640, int(self.width() * 0.42)))
             h = max(200, self.height() - 80)
         tree.setGeometry(x, y, w, h)
 
