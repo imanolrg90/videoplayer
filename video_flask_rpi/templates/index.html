@@ -15,6 +15,7 @@
       </div>
       <div class="top-actions">
         <input id="searchInput" type="search" placeholder="Buscar en carpeta actual..." />
+        <span id="pendingBadge" class="pending-badge" title="Operaciones diferidas pendientes">Pendientes: 0</span>
         <button id="refreshBtn">Refrescar</button>
         <button id="logBtn">Log</button>
         <button id="logoutBtn">Salir</button>
@@ -63,9 +64,17 @@
           </div>
           <div class="actions-box">
             <button id="playBtn" class="state-btn" disabled>Reproducir</button>
+            <button id="prevBtn" class="state-btn" disabled>Anterior</button>
+            <button id="nextBtn" class="state-btn" disabled>Siguiente</button>
+            <button id="randomBtn" class="state-btn">Aleatorio</button>
             <button id="favBtn" class="state-btn" disabled>Favorito</button>
             <button id="watchedBtn" class="state-btn" disabled>Marcar visto</button>
             <button id="deleteBtn" class="state-btn" disabled>Borrar (diferido)</button>
+            <button id="repeatBtn" class="state-btn">Repeat: OFF</button>
+            <button id="muteBtn" class="state-btn">Mute: OFF</button>
+            <label class="vol-wrap">Volumen
+              <input id="volumeSlider" type="range" min="0" max="100" step="1" value="100" />
+            </label>
             <div class="counter">Videos: <span id="countBadge">0</span></div>
             <div id="statusLine" class="status-line"></div>
           </div>

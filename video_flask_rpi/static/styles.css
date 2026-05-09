@@ -12,7 +12,8 @@ body { margin: 0; background: radial-gradient(circle at top right, #1a2e54 0%, #
 .brand { padding: 0.7rem 0.9rem; }
 .brand h1 { margin:0; font-size:1.2rem; }
 .brand p { margin:.15rem 0 0; color:var(--muted); font-size:.86rem; }
-.top-actions { padding:0.6rem; display:grid; grid-template-columns: 1fr auto auto auto; gap: .5rem; }
+.top-actions { padding:0.6rem; display:grid; grid-template-columns: 1fr auto auto auto auto; gap: .5rem; align-items:center; }
+.pending-badge { border:1px solid #7d5f2c; background:linear-gradient(180deg, #5b4722, #3f321c); color:#f8e5be; border-radius:8px; padding:.5rem .65rem; font-size:.82rem; font-weight:700; white-space:nowrap; }
 input[type="search"] { width:100%; border:1px solid var(--line-soft); background:#101723; color:var(--text); border-radius:8px; padding:.62rem .72rem; font-size:.92rem; }
 button { border:1px solid #355375; border-radius:8px; padding:.58rem .72rem; background:linear-gradient(180deg, #2b3f59, #25354b); color:#e7f0ff; font-weight:600; cursor:pointer; }
 .filters { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; margin-bottom:.65rem; }
@@ -54,6 +55,8 @@ button { border:1px solid #355375; border-radius:8px; padding:.58rem .72rem; bac
 .state-btn { width:100%; }
 .state-btn.active { background:linear-gradient(180deg, #3f7ac4, #3566a2); border-color:#67a1e9; }
 .state-btn:disabled { opacity:.6; cursor:not-allowed; }
+.vol-wrap { display:grid; gap:.3rem; color:var(--muted); font-size:.8rem; }
+.vol-wrap input[type="range"] { width:100%; }
 .counter, .status-line { color:var(--muted); font-size:.82rem; }
 .empty { color:var(--muted); text-align:center; padding:1rem; }
 .log-modal { position:fixed; inset:0; background:rgba(6,10,14,.72); display:grid; place-items:center; z-index:50; }

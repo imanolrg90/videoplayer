@@ -403,6 +403,43 @@ def queue_pending_rwd(abs_path: str) -> None:
     add_pending_rename(abs_path)
 
 
+def get_pending_counts() -> dict:
+    with db_connect() as conn:
+        row = conn.execute("SELECT COUNT(*) AS c FROM pending_renames").fetchone()
+        n_rwd = int(row["c"] if row else 0)
+
+    raw_del = get_setting("pending_delete_paths", "[]")
+    raw_fav = get_setting("pending_fav_renames", "[]")
+    raw_meta = get_setting("pending_metadata_sync_paths", "[]")
+
+    try:
+        data_del = json.loads(raw_del) if raw_del else []
+        n_del = len([p for p in data_del if p]) if isinstance(data_del, list) else 0
+    except Exception:
+        n_del = 0
+
+    try:
+        data_fav = json.loads(raw_fav) if raw_fav else []
+        n_fav = len([r for r in data_fav if isinstance(r, dict) and r.get("old") and r.get("new")]) if isinstance(data_fav, list) else 0
+    except Exception:
+        n_fav = 0
+
+    try:
+        data_meta = json.loads(raw_meta) if raw_meta else []
+        n_meta = len([p for p in data_meta if p]) if isinstance(data_meta, list) else 0
+    except Exception:
+        n_meta = 0
+
+    total = int(n_rwd + n_del + n_fav + n_meta)
+    return {
+        "rwd": int(n_rwd),
+        "borrar": int(n_del),
+        "top": int(n_fav),
+        "meta": int(n_meta),
+        "total": total,
+    }
+
+
 def ensure_thumbnail(video_path: Path) -> Path | None:
     if not Path(FFMPEG_PATH).exists():
         return None
@@ -696,6 +733,12 @@ def defer_delete_api():
     queue_pending_delete(norm_abs(video_path))
     LOGGER.info("API /video/delete path=%s queued_delete=1", rel_norm)
     return jsonify({"ok": True, "queued": True, "path": rel_norm})
+
+
+@app.get("/api/pending/summary")
+@auth_required
+def pending_summary_api():
+    return jsonify({"ok": True, "counts": get_pending_counts()})
 
 
 @app.get("/api/log")
