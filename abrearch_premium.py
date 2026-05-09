@@ -4151,8 +4151,10 @@ class VideoBrowserApp(QMainWindow):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self._main_splitter = splitter
 
-        self.tree = QTreeWidget(self)
+        self.tree = QTreeWidget(None)
         self.tree.setObjectName("sidebarTree")
+        self.tree.setWindowFlag(Qt.WindowType.Popup, True)
+        self.tree.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.tree.setHeaderLabels(["", "Carpeta", "Vistas", "Tiempo", "Peso", "% Rev", "% Hash", "Mini"])
         self.tree.setIndentation(16)
         self.tree.setIconSize(QSize(FOLDER_TREE_ICON_SIZE, FOLDER_TREE_ICON_SIZE))
@@ -4166,7 +4168,7 @@ class VideoBrowserApp(QMainWindow):
         self.tree.itemDoubleClicked.connect(self._on_tree_double_click)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._tree_context_menu)
-        # Overlay flotante: hijo de la ventana principal, oculto por defecto
+        # Overlay flotante: popup de nivel superior, oculto por defecto
         self.tree.setVisible(False)
         self.tree.raise_()
         try:
@@ -4484,22 +4486,20 @@ class VideoBrowserApp(QMainWindow):
         self._privacy_overlay = QFrame(self)
         self._privacy_overlay.setVisible(False)
         self._privacy_overlay.setStyleSheet(
-            "QFrame#privacyOverlay { "
-            "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "    stop:0 #07080f, stop:1 #0d1020); "
-            "}"
-            "QLabel { color: #e8eeff; }"
-            "QLineEdit { background:#10152a; color:#e8eeff; "
-            "  border:1px solid #2a3560; border-radius:10px; "
-            "  padding:10px 14px; font-size:11pt; min-width:280px; }"
-            "QLineEdit:focus { border:1px solid #4a6ab0; }"
-            "QPushButton#btnUnlock { background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "  stop:0 #2a4a9e, stop:1 #1a2f6e); color:#fff; "
-            "  border:none; border-radius:10px; padding:10px 0px; "
-            "  font-size:11pt; font-weight:700; min-width:280px; }"
-            "QPushButton#btnUnlock:hover { background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "  stop:0 #3a5ec0, stop:1 #2a3f8e); }"
-            "QPushButton#btnUnlock:pressed { background:#1a2a5a; }"
+            "QFrame#privacyOverlay { background: #f9f9f9; }"
+            "QLabel { color: #0f0f0f; background: transparent; border: none; }"
+            "QLineEdit { background:#ffffff; color:#0f0f0f; "
+            "  border:1px solid #c6c6c6; border-radius:4px; "
+            "  padding:14px 14px; font-size:11pt; min-width:300px; }"
+            "QLineEdit:focus { border:1.5px solid #1a73e8; }"
+            "QPushButton#btnUnlock { background:#ff0000; color:#ffffff; "
+            "  border:none; border-radius:18px; padding:10px 28px; "
+            "  font-size:10pt; font-weight:700; }"
+            "QPushButton#btnUnlock:hover  { background:#e60000; }"
+            "QPushButton#btnUnlock:pressed { background:#cc0000; }"
+            "QLabel#ytLogoBig { background:#ff0000; color:#ffffff; "
+            "  border-radius:14px; padding:8px 16px; "
+            "  font-size:18pt; font-weight:800; letter-spacing:0.5px; }"
         )
         self._privacy_overlay.setObjectName("privacyOverlay")
 
@@ -4507,92 +4507,82 @@ class VideoBrowserApp(QMainWindow):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addStretch(2)
 
-        # ── card ──
+        # ── card estilo Google/YouTube ──
         card = QFrame()
         card.setObjectName("privacyCard")
-        card.setFixedWidth(380)
+        card.setFixedWidth(440)
         card.setStyleSheet(
-            "QFrame#privacyCard { background:rgba(255,255,255,6); "
-            "border:1px solid rgba(255,255,255,12); border-radius:20px; }"
+            "QFrame#privacyCard { background:#ffffff; "
+            "border:1px solid #dadce0; border-radius:12px; }"
         )
         card_lay = QVBoxLayout(card)
-        card_lay.setContentsMargins(36, 40, 36, 40)
+        card_lay.setContentsMargins(48, 44, 48, 36)
         card_lay.setSpacing(0)
 
-        # logo / icon
-        lbl_icon = QLabel("🎬")
+        # logo ▶ YouTube centrado
+        logo_row = QHBoxLayout()
+        logo_row.addStretch()
+        lbl_icon = QLabel("▶ YouTube")
+        lbl_icon.setObjectName("ytLogoBig")
         lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_icon.setStyleSheet("font-size:52px; background:transparent; border:none;")
-        card_lay.addWidget(lbl_icon)
-        card_lay.addSpacing(12)
+        logo_row.addWidget(lbl_icon)
+        logo_row.addStretch()
+        card_lay.addLayout(logo_row)
+        card_lay.addSpacing(18)
 
-        lbl_app = QLabel("Video Manager")
+        lbl_app = QLabel("Iniciar sesión")
         lbl_app.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_app.setStyleSheet(
-            "font-size:22pt; font-weight:800; letter-spacing:1px; "
-            "background:transparent; border:none; "
-            "color: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7eb8f7,stop:1 #a98af7);"
+            "font-size:20pt; font-weight:500; color:#202124; "
+            "background:transparent; border:none;"
         )
         card_lay.addWidget(lbl_app)
-        card_lay.addSpacing(4)
+        card_lay.addSpacing(6)
 
-        lbl_sub = QLabel("Acceso protegido")
+        lbl_sub = QLabel("Continuar a Video Manager")
         lbl_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_sub.setStyleSheet(
-            "font-size:9pt; letter-spacing:3px; text-transform:uppercase; "
-            "color:#5a6a9a; background:transparent; border:none;"
+            "font-size:10pt; color:#5f6368; "
+            "background:transparent; border:none;"
         )
         card_lay.addWidget(lbl_sub)
-        card_lay.addSpacing(32)
-
-        # separator line
-        sep = QFrame()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet("background:rgba(255,255,255,10); border:none;")
-        card_lay.addWidget(sep)
         card_lay.addSpacing(28)
 
-        lbl_user = QLabel("Usuario")
-        lbl_user.setStyleSheet(
-            "font-size:8pt; letter-spacing:2px; text-transform:uppercase; "
-            "color:#4a5a8a; background:transparent; border:none;"
-        )
-        card_lay.addWidget(lbl_user)
-        card_lay.addSpacing(6)
-
         self._privacy_user_input = QLineEdit()
-        self._privacy_user_input.setPlaceholderText("Introduce tu usuario")
+        self._privacy_user_input.setPlaceholderText("Correo electrónico o usuario")
         self._privacy_user_input.returnPressed.connect(self._attempt_unlock_privacy)
         card_lay.addWidget(self._privacy_user_input)
-        card_lay.addSpacing(16)
-
-        lbl_pw = QLabel("Contraseña")
-        lbl_pw.setStyleSheet(
-            "font-size:8pt; letter-spacing:2px; text-transform:uppercase; "
-            "color:#4a5a8a; background:transparent; border:none;"
-        )
-        card_lay.addWidget(lbl_pw)
-        card_lay.addSpacing(6)
+        card_lay.addSpacing(14)
 
         self._privacy_pass_input = QLineEdit()
         self._privacy_pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self._privacy_pass_input.setPlaceholderText("Introduce tu contraseña")
+        self._privacy_pass_input.setPlaceholderText("Contraseña")
         self._privacy_pass_input.returnPressed.connect(self._attempt_unlock_privacy)
         card_lay.addWidget(self._privacy_pass_input)
-        card_lay.addSpacing(20)
+        card_lay.addSpacing(28)
 
-        btn_unlock = QPushButton("Desbloquear")
+        # fila inferior: enlace ayuda + botón rojo a la derecha
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        lbl_help = QLabel("¿Olvidaste tu contraseña?")
+        lbl_help.setStyleSheet(
+            "color:#1a73e8; font-size:9pt; font-weight:600; "
+            "background:transparent; border:none;"
+        )
+        actions.addWidget(lbl_help)
+        actions.addStretch()
+        btn_unlock = QPushButton("Siguiente")
         btn_unlock.setObjectName("btnUnlock")
-        btn_unlock.setFixedHeight(46)
         btn_unlock.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_unlock.clicked.connect(self._attempt_unlock_privacy)
-        card_lay.addWidget(btn_unlock)
+        actions.addWidget(btn_unlock)
+        card_lay.addLayout(actions)
         card_lay.addSpacing(14)
 
         self._privacy_info_label = QLabel("")
         self._privacy_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._privacy_info_label.setStyleSheet(
-            "color:#ff8090; font-size:9pt; font-weight:600; "
+            "color:#d93025; font-size:9pt; font-weight:600; "
             "background:transparent; border:none;"
         )
         card_lay.addWidget(self._privacy_info_label)
@@ -4733,12 +4723,16 @@ class VideoBrowserApp(QMainWindow):
         y = 60
         if btn_h is not None:
             try:
-                pt = btn_h.mapTo(self, btn_h.rect().bottomLeft())
-                x = max(8, pt.x())
+                pt = btn_h.mapToGlobal(btn_h.rect().bottomLeft())
+                x = pt.x()
                 y = pt.y() + 6
             except Exception:
                 pass
-        h = max(200, self.height() - y - 20)
+        try:
+            screen_geo = btn_h.screen().availableGeometry() if btn_h is not None and btn_h.screen() is not None else QApplication.primaryScreen().availableGeometry()
+            h = max(200, screen_geo.bottom() - y - 20)
+        except Exception:
+            h = max(200, self.height() - 80)
         tree.setGeometry(x, y, w, h)
 
     def _update_thumb_progress(self, actual=None):
@@ -5434,11 +5428,12 @@ class VideoBrowserApp(QMainWindow):
         new_state = not tree.isVisible()
         if new_state:
             self._sync_sidebar_overlay_geometry()
-            tree.setVisible(True)
+            tree.show()
             tree.raise_()
+            tree.activateWindow()
             tree.setFocus()
         else:
-            tree.setVisible(False)
+            tree.hide()
         btn_h = getattr(self, "btn_hamburger", None)
         if btn_h is not None:
             try:
@@ -5448,6 +5443,13 @@ class VideoBrowserApp(QMainWindow):
 
     def eventFilter(self, obj, event):
         from PyQt6.QtCore import QEvent
+        if obj is getattr(self, "tree", None) and event.type() == QEvent.Type.Hide:
+            btn_h = getattr(self, "btn_hamburger", None)
+            if btn_h is not None:
+                try:
+                    btn_h.setChecked(False)
+                except Exception:
+                    pass
         # Auto-cerrar el árbol (sidebar) al pulsar fuera de él o del botón hamburguesa
         try:
             if event.type() == QEvent.Type.MouseButtonPress:
@@ -5457,7 +5459,7 @@ class VideoBrowserApp(QMainWindow):
                     inside_tree = (obj is tree) or tree.isAncestorOf(obj)
                     inside_btn = btn_h is not None and (obj is btn_h or btn_h.isAncestorOf(obj))
                     if not inside_tree and not inside_btn:
-                        tree.setVisible(False)
+                        tree.hide()
                         if btn_h is not None:
                             try:
                                 btn_h.setChecked(False)
