@@ -3458,6 +3458,11 @@ class VideoBrowserApp(QMainWindow):
         self.filtro_texto = ""
         self.incluir_fotos_gestion = False
         self._photo_autonext_token = 0
+        self._reco_top_pool = []
+        self._reco_top_cursor = 0
+        self._reco_top_chunk_size = 18
+        self._reco_thumb_cache = {}
+        self._reco_loading_chunk = False
         self.duration_cache = {}
         self.idle_hash_queue = []
         self.idle_hash_in_progress = False
@@ -4145,7 +4150,7 @@ class VideoBrowserApp(QMainWindow):
         reco_layout.setContentsMargins(8, 6, 8, 6)
         reco_layout.setSpacing(6)
 
-        self.lbl_reco_title = QLabel("Recomendados")
+        self.lbl_reco_title = QLabel("Recomendados Top")
         self.lbl_reco_title.setObjectName("detail")
         reco_layout.addWidget(self.lbl_reco_title)
 
@@ -4163,6 +4168,7 @@ class VideoBrowserApp(QMainWindow):
         self.reco_list.setGridSize(QSize(190, 134))
         self.reco_list.setMaximumHeight(150)
         self.reco_list.itemClicked.connect(self._on_reco_item_clicked)
+        self.reco_list.horizontalScrollBar().valueChanged.connect(self._on_reco_scroll_changed)
         reco_layout.addWidget(self.reco_list)
 
         top_layout.addWidget(self.reco_panel)
@@ -7946,44 +7952,74 @@ class VideoBrowserApp(QMainWindow):
             return
         if self.incluir_fotos_gestion:
             self.reco_list.clear()
+            self._reco_top_pool = []
+            self._reco_top_cursor = 0
             return
 
         pool = self._recommendation_source_videos()
         if not pool:
             self.reco_list.clear()
+            self._reco_top_pool = []
+            self._reco_top_cursor = 0
             return
 
         full_stats = stats_map or self.db.obtener_stats_batch([str(v) for v in pool])
+        top_pool = [v for v in pool if v.name.lower().startswith("top ")]
+        top_pool.sort(
+            key=lambda v: (
+                full_stats.get(str(v).replace('\\', '/'), {}).get('reproducciones', 0),
+                v.name.lower(),
+            ),
+            reverse=True,
+        )
 
-        rec_for_you = self._recommendation_candidates("for_you", 8, full_stats)
-        rec_most = self._recommendation_candidates("most_viewed", 8, full_stats)
-        rec_fav = self._recommendation_candidates("favorites", 6, full_stats)
+        self._reco_top_pool = top_pool
+        self._reco_top_cursor = 0
+        self._reco_thumb_cache = dict(thumbs_map or {})
+        self.reco_list.clear()
+        self._append_reco_top_chunk()
 
-        merged = []
-        seen = set()
-        for group in (rec_for_you, rec_most, rec_fav):
-            for v in group:
-                key = str(v)
-                if key in seen:
-                    continue
-                seen.add(key)
-                merged.append(v)
-                if len(merged) >= 14:
-                    break
-            if len(merged) >= 14:
-                break
+    def _append_reco_top_chunk(self):
+        if self._reco_loading_chunk:
+            return
+        if not self._reco_top_pool:
+            return
+        if self._reco_top_cursor >= len(self._reco_top_pool):
+            return
 
-        needed = [str(v) for v in merged]
-        batch_thumbs = thumbs_map or {}
-        missing = [r for r in needed if r.replace('\\', '/') not in batch_thumbs]
-        if missing:
-            try:
-                batch_thumbs = dict(batch_thumbs)
-                batch_thumbs.update(self.db.obtener_miniaturas_batch(missing))
-            except Exception:
-                pass
+        self._reco_loading_chunk = True
+        try:
+            start = self._reco_top_cursor
+            end = min(start + self._reco_top_chunk_size, len(self._reco_top_pool))
+            chunk = self._reco_top_pool[start:end]
+            needed = [str(v) for v in chunk]
+            missing = [r for r in needed if r.replace('\\', '/') not in self._reco_thumb_cache]
+            if missing:
+                try:
+                    self._reco_thumb_cache.update(self.db.obtener_miniaturas_batch(missing))
+                except Exception:
+                    pass
 
-        self._populate_reco_list(self.reco_list, merged, batch_thumbs, shorts=False)
+            self.reco_list.blockSignals(True)
+            icon_size = self.reco_list.iconSize()
+            for v in chunk:
+                item = QListWidgetItem()
+                item.setData(Qt.ItemDataRole.UserRole, str(v))
+                item.setIcon(self._make_thumb_icon_for_video(v, self._reco_thumb_cache, icon_size))
+                item.setText(v.stem[:26])
+                item.setToolTip(str(v))
+                self.reco_list.addItem(item)
+            self.reco_list.blockSignals(False)
+            self._reco_top_cursor = end
+        finally:
+            self._reco_loading_chunk = False
+
+    def _on_reco_scroll_changed(self, value: int):
+        bar = self.reco_list.horizontalScrollBar() if hasattr(self, "reco_list") else None
+        if not bar:
+            return
+        if value >= bar.maximum() - 4:
+            self._append_reco_top_chunk()
 
     def _on_reco_item_clicked(self, item: QListWidgetItem):
         if not item:
