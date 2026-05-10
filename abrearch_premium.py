@@ -3631,6 +3631,15 @@ class VideoBrowserApp(QMainWindow):
                 background: #ffffff;
                 border: 1px solid #d0d0d0;
                 border-radius: 14px;
+                font-size: 12pt;
+            }
+            QTreeWidget#sidebarTree::item {
+                padding: 4px 4px;
+                margin: 0px 1px;
+            }
+            QTreeWidget#sidebarTree QHeaderView::section {
+                padding: 3px 6px;
+                font-size: 10pt;
             }
             QTreeWidget::item {
                 padding: 10px 6px;
@@ -4159,11 +4168,12 @@ class VideoBrowserApp(QMainWindow):
         self.tree.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.tree.setHeaderLabels(["", "Carpeta", "Vistas", "Tiempo", "Peso", "% Rev", "% Hash", "Mini"])
         self.tree.setIndentation(16)
-        self.tree.setIconSize(QSize(96, 96))
+        self.tree.setIconSize(QSize(192, 192))
         self.tree.header().setStretchLastSection(False)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tree.setColumnWidth(0, 140)
+        self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.tree.setColumnWidth(1, 280)
+        self.tree.setColumnWidth(0, 236)
         for c in (2, 3, 4, 5, 6, 7):
             self.tree.header().setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
             self.tree.setColumnHidden(c, False)
@@ -4726,15 +4736,18 @@ class VideoBrowserApp(QMainWindow):
             return
         # Recalcular anchos visibles para mostrar todas las columnas del árbol.
         try:
-            for col in (0, 2, 3, 4, 5, 6, 7):
+            for col in (0, 1, 2, 3, 4, 5, 6, 7):
                 tree.resizeColumnToContents(col)
         except Exception:
             pass
-        icon_w = max(120, tree.iconSize().width() + 36)
+        icon_w = max(220, tree.iconSize().width() + 28)
         tree.setColumnWidth(0, icon_w)
-        fixed_sum = icon_w
+        # Limitar Carpeta a un ancho razonable para evitar espacio vacío exagerado.
+        folder_w = min(320, max(180, tree.columnWidth(1) + 8))
+        tree.setColumnWidth(1, folder_w)
+        fixed_sum = icon_w + folder_w
         for col in (2, 3, 4, 5, 6, 7):
-            fixed_sum += max(68, tree.columnWidth(col) + 14)
+            fixed_sum += max(56, tree.columnWidth(col) + 6)
         # Posicionar bajo el botón hamburguesa
         x = 12
         y = 60
@@ -4748,12 +4761,12 @@ class VideoBrowserApp(QMainWindow):
         try:
             screen_geo = btn_h.screen().availableGeometry() if btn_h is not None and btn_h.screen() is not None else QApplication.primaryScreen().availableGeometry()
             # Columna carpeta amplia + columnas de stats + margen.
-            w_min = fixed_sum + 320
-            w = max(w_min, min(1120, int(screen_geo.width() * 0.74)))
+            w_min = fixed_sum + 54
+            w = max(w_min, min(1080, int(screen_geo.width() * 0.72)))
             w = min(w, max(320, screen_geo.width() - 24))
             h = max(200, screen_geo.bottom() - y - 20)
         except Exception:
-            w = max(fixed_sum + 280, min(980, int(self.width() * 0.68)))
+            w = max(fixed_sum + 44, min(980, int(self.width() * 0.68)))
             h = max(200, self.height() - 80)
         tree.setGeometry(x, y, w, h)
 
