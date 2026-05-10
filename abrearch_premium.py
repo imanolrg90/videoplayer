@@ -4159,18 +4159,16 @@ class VideoBrowserApp(QMainWindow):
         self.tree.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.tree.setHeaderLabels(["", "Carpeta", "Vistas", "Tiempo", "Peso", "% Rev", "% Hash", "Mini"])
         self.tree.setIndentation(16)
-        self.tree.setIconSize(QSize(52, 52))
+        self.tree.setIconSize(QSize(96, 96))
         self.tree.header().setStretchLastSection(False)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tree.header().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        self.tree.setColumnWidth(0, 84)
-        for c in (2, 3, 4, 5, 7):
+        self.tree.setColumnWidth(0, 140)
+        for c in (2, 3, 4, 5, 6, 7):
             self.tree.header().setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
-            self.tree.setColumnHidden(c, True)
-        self.tree.setColumnHidden(6, False)
+            self.tree.setColumnHidden(c, False)
         self.tree.setHeaderHidden(False)
-        self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.tree.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.tree.currentItemChanged.connect(self._on_tree_select)
         self.tree.itemDoubleClicked.connect(self._on_tree_double_click)
@@ -4726,15 +4724,17 @@ class VideoBrowserApp(QMainWindow):
         btn_h = getattr(self, "btn_hamburger", None)
         if tree is None:
             return
-        # Recalcular anchos visibles para que % Hash entre sin scroll horizontal.
+        # Recalcular anchos visibles para mostrar todas las columnas del árbol.
         try:
-            tree.resizeColumnToContents(6)
+            for col in (0, 2, 3, 4, 5, 6, 7):
+                tree.resizeColumnToContents(col)
         except Exception:
             pass
-        icon_w = max(74, tree.iconSize().width() + 24)
+        icon_w = max(120, tree.iconSize().width() + 36)
         tree.setColumnWidth(0, icon_w)
-        hash_w = max(94, tree.columnWidth(6) + 18)
-        tree.setColumnWidth(6, hash_w)
+        fixed_sum = icon_w
+        for col in (2, 3, 4, 5, 6, 7):
+            fixed_sum += max(68, tree.columnWidth(col) + 14)
         # Posicionar bajo el botón hamburguesa
         x = 12
         y = 60
@@ -4747,13 +4747,13 @@ class VideoBrowserApp(QMainWindow):
                 pass
         try:
             screen_geo = btn_h.screen().availableGeometry() if btn_h is not None and btn_h.screen() is not None else QApplication.primaryScreen().availableGeometry()
-            # Nombre de carpeta + icono + hash con margen.
-            w_min = icon_w + hash_w + 260
-            w = max(w_min, min(760, int(screen_geo.width() * 0.45)))
+            # Columna carpeta amplia + columnas de stats + margen.
+            w_min = fixed_sum + 320
+            w = max(w_min, min(1120, int(screen_geo.width() * 0.74)))
             w = min(w, max(320, screen_geo.width() - 24))
             h = max(200, screen_geo.bottom() - y - 20)
         except Exception:
-            w = max(icon_w + hash_w + 240, min(640, int(self.width() * 0.42)))
+            w = max(fixed_sum + 280, min(980, int(self.width() * 0.68)))
             h = max(200, self.height() - 80)
         tree.setGeometry(x, y, w, h)
 
@@ -5465,6 +5465,16 @@ class VideoBrowserApp(QMainWindow):
 
     def eventFilter(self, obj, event):
         from PyQt6.QtCore import QEvent
+        if event.type() in (QEvent.Type.ApplicationDeactivate, QEvent.Type.WindowDeactivate):
+            tree = getattr(self, "tree", None)
+            if tree is not None and tree.isVisible():
+                tree.hide()
+                btn_h = getattr(self, "btn_hamburger", None)
+                if btn_h is not None:
+                    try:
+                        btn_h.setChecked(False)
+                    except Exception:
+                        pass
         if obj is getattr(self, "tree", None) and event.type() == QEvent.Type.Hide:
             btn_h = getattr(self, "btn_hamburger", None)
             if btn_h is not None:
@@ -6819,6 +6829,15 @@ class VideoBrowserApp(QMainWindow):
             self.carpeta_actual = Path(ruta)
             self._start_folder_view_log(self.carpeta_actual)
             self._refresh_list()
+            tree = getattr(self, "tree", None)
+            if tree is not None and tree.isVisible():
+                tree.hide()
+            btn_h = getattr(self, "btn_hamburger", None)
+            if btn_h is not None:
+                try:
+                    btn_h.setChecked(False)
+                except Exception:
+                    pass
 
     def _on_tree_double_click(self, item, _column):
         ruta = item.data(0, Qt.ItemDataRole.UserRole)
