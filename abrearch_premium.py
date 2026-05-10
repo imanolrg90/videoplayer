@@ -4153,7 +4153,9 @@ class VideoBrowserApp(QMainWindow):
 
         self.tree = QTreeWidget(None)
         self.tree.setObjectName("sidebarTree")
-        self.tree.setWindowFlag(Qt.WindowType.Popup, True)
+        self.tree.setWindowFlag(Qt.WindowType.Popup, False)
+        self.tree.setWindowFlag(Qt.WindowType.Tool, True)
+        self.tree.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.tree.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.tree.setHeaderLabels(["", "Carpeta", "Vistas", "Tiempo", "Peso", "% Rev", "% Hash", "Mini"])
         self.tree.setIndentation(16)
@@ -4174,6 +4176,8 @@ class VideoBrowserApp(QMainWindow):
         self.tree.itemDoubleClicked.connect(self._on_tree_double_click)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._tree_context_menu)
+        self.tree.viewport().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.viewport().customContextMenuRequested.connect(self._tree_context_menu)
         # Overlay flotante: popup de nivel superior, oculto por defecto
         self.tree.setVisible(False)
         self.tree.raise_()
