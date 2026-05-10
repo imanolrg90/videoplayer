@@ -4745,9 +4745,8 @@ class VideoBrowserApp(QMainWindow):
         # Limitar Carpeta a un ancho razonable para evitar espacio vacío exagerado.
         folder_w = min(320, max(180, tree.columnWidth(1) + 8))
         tree.setColumnWidth(1, folder_w)
-        fixed_sum = icon_w + folder_w
         for col in (2, 3, 4, 5, 6, 7):
-            fixed_sum += max(56, tree.columnWidth(col) + 6)
+            tree.setColumnWidth(col, max(52, tree.columnWidth(col) + 2))
         # Posicionar bajo el botón hamburguesa
         x = 12
         y = 60
@@ -4760,13 +4759,16 @@ class VideoBrowserApp(QMainWindow):
                 pass
         try:
             screen_geo = btn_h.screen().availableGeometry() if btn_h is not None and btn_h.screen() is not None else QApplication.primaryScreen().availableGeometry()
-            # Columna carpeta amplia + columnas de stats + margen.
-            w_min = fixed_sum + 54
-            w = max(w_min, min(1080, int(screen_geo.width() * 0.72)))
-            w = min(w, max(320, screen_geo.width() - 24))
+            visible_cols = [c for c in range(tree.columnCount()) if not tree.isColumnHidden(c)]
+            content_w = sum(tree.columnWidth(c) for c in visible_cols)
+            # Ajuste ceñido al contenido: evita hueco blanco extra al final.
+            w = content_w + 18
+            w = max(360, min(w, max(360, screen_geo.width() - 24)))
             h = max(200, screen_geo.bottom() - y - 20)
         except Exception:
-            w = max(fixed_sum + 44, min(980, int(self.width() * 0.68)))
+            visible_cols = [c for c in range(tree.columnCount()) if not tree.isColumnHidden(c)]
+            content_w = sum(tree.columnWidth(c) for c in visible_cols)
+            w = max(360, min(content_w + 18, 980))
             h = max(200, self.height() - 80)
         tree.setGeometry(x, y, w, h)
 
@@ -6310,16 +6312,57 @@ class VideoBrowserApp(QMainWindow):
             pm = QPixmap(str(img)) if img else QPixmap()
 
         if not pm.isNull():
-            # Scale at 2× logical size and set device-pixel-ratio so Qt
-            # renders the icon crisply on both standard and HiDPI screens.
-            px = FOLDER_TREE_ICON_SIZE * 2
-            pm_hi = pm.scaled(px, px, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                               Qt.TransformationMode.SmoothTransformation)
-            pm_hi.setDevicePixelRatio(2.0)
-            icon = QIcon(pm_hi)
+            icon = self._make_premium_folder_channel_icon(pm, self.tree.iconSize())
 
         self.folder_icon_cache[key] = icon
         return icon
+
+    def _make_premium_folder_channel_icon(self, source_pm: QPixmap, target_size: QSize):
+        """Render a folder thumbnail as a premium 'channel card' icon."""
+        if source_pm.isNull():
+            return QIcon()
+        w = max(96, int(target_size.width()))
+        h = max(96, int(target_size.height()))
+        dpr = 2.0
+        ww = int(w * dpr)
+        hh = int(h * dpr)
+
+        canvas = QPixmap(ww, hh)
+        canvas.fill(Qt.GlobalColor.transparent)
+
+        p = QPainter(canvas)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
+        radius = int(16 * dpr)
+        card_path = QPainterPath()
+        card_path.addRoundedRect(1.0, 1.0, float(ww - 2), float(hh - 2), float(radius), float(radius))
+
+        # Base card background.
+        p.fillPath(card_path, QColor("#141414"))
+        p.setClipPath(card_path)
+
+        # Centered crop to avoid portrait images sticking to one side.
+        scaled = source_pm.scaled(
+            ww,
+            hh,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        sx = max(0, (scaled.width() - ww) // 2)
+        sy = max(0, (scaled.height() - hh) // 2)
+        p.drawPixmap(0, 0, scaled, sx, sy, ww, hh)
+
+        # Subtle top-to-bottom overlay for premium channel-card look.
+        p.fillRect(0, 0, ww, hh, QColor(0, 0, 0, 26))
+
+        p.setClipping(False)
+        p.setPen(QPen(QColor("#f1f1f1"), 2))
+        p.drawRoundedRect(1, 1, ww - 2, hh - 2, radius, radius)
+        p.end()
+
+        canvas.setDevicePixelRatio(dpr)
+        return QIcon(canvas)
 
     def _is_tmpmeta_file(self, path_obj: Path):
         """Return True for temporary ffmpeg metadata files that must be auto-removed."""
