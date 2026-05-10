@@ -5452,7 +5452,6 @@ class VideoBrowserApp(QMainWindow):
             self._sync_sidebar_overlay_geometry()
             tree.show()
             tree.raise_()
-            tree.activateWindow()
             tree.setFocus()
         else:
             tree.hide()
@@ -5465,16 +5464,6 @@ class VideoBrowserApp(QMainWindow):
 
     def eventFilter(self, obj, event):
         from PyQt6.QtCore import QEvent
-        if event.type() in (QEvent.Type.ApplicationDeactivate, QEvent.Type.WindowDeactivate):
-            tree = getattr(self, "tree", None)
-            if tree is not None and tree.isVisible():
-                tree.hide()
-                btn_h = getattr(self, "btn_hamburger", None)
-                if btn_h is not None:
-                    try:
-                        btn_h.setChecked(False)
-                    except Exception:
-                        pass
         if obj is getattr(self, "tree", None) and event.type() == QEvent.Type.Hide:
             btn_h = getattr(self, "btn_hamburger", None)
             if btn_h is not None:
