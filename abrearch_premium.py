@@ -17,6 +17,11 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 from collections import defaultdict, deque
+
+# Silence noisy FFmpeg/OpenCV stderr decoder messages (e.g. Invalid NAL unit).
+# Must be set before importing cv2 anywhere in the process.
+os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")
+os.environ.setdefault("OPENCV_LOG_LEVEL", "SILENT")
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QMessageBox, QInputDialog, QFrame,
@@ -122,6 +127,34 @@ def _handle_thread_exception(args):
 
 if hasattr(threading, "excepthook"):
     threading.excepthook = _handle_thread_exception
+
+
+def _silence_opencv_runtime_logs():
+    """Best-effort runtime log suppression for OpenCV across versions."""
+    try:
+        import cv2
+    except Exception:
+        return
+
+    # Newer OpenCV builds: cv2.setLogLevel(cv2.LOG_LEVEL_*)
+    try:
+        if hasattr(cv2, "LOG_LEVEL_SILENT") and hasattr(cv2, "setLogLevel"):
+            cv2.setLogLevel(cv2.LOG_LEVEL_SILENT)
+            return
+    except Exception:
+        pass
+
+    # Older OpenCV builds: cv2.utils.logging.setLogLevel(...)
+    try:
+        if hasattr(cv2, "utils") and hasattr(cv2.utils, "logging"):
+            lvl = getattr(cv2.utils.logging, "LOG_LEVEL_SILENT", None)
+            if lvl is not None:
+                cv2.utils.logging.setLogLevel(lvl)
+    except Exception:
+        pass
+
+
+_silence_opencv_runtime_logs()
 
 # ---------------------------------------------------------------------------
 # Gender classification (Levi & Hassner Caffe model via OpenCV DNN)
