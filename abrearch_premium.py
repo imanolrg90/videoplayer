@@ -8930,26 +8930,31 @@ class VideoBrowserApp(QMainWindow):
 
         first = Path(videos[0])
         self.forzar_guardado_tiempo_actual()
-        self.carpeta_actual = first.parent
-        self._show_folder_lists()
-        self._refresh_list()
-        self.video_elegido = first
-        self._select_table_row_for_path(first)
-        self._reproducir_elegido()
+        self._play_dashboard_video_fast(first)
         self._notify(f"Play {self._dashboard_block_queue_name}: {first.name}", 1800)
+
+    def _play_dashboard_video_fast(self, ruta: Path) -> bool:
+        """Play a dashboard queue video without forcing a full folder refresh."""
+        p = Path(ruta)
+        if not p.exists() or p.suffix.lower() not in EXTENSIONES_VIDEO:
+            return False
+        self.carpeta_actual = p.parent
+        self._show_folder_lists()
+        if hasattr(self, "lbl_folder"):
+            self.lbl_folder.setText(f"{p.parent.name}  —  reproducción rápida")
+        self.video_elegido = p
+        # Only selects if the row is already present in the current table model.
+        self._select_table_row_for_path(p)
+        self._reproducir_elegido()
+        return True
 
     def _play_next_from_dashboard_block_queue(self):
         while self._dashboard_block_queue:
             cand = Path(self._dashboard_block_queue.pop(0))
             if not cand.exists() or cand.suffix.lower() not in EXTENSIONES_VIDEO:
                 continue
-            self.carpeta_actual = cand.parent
-            self._show_folder_lists()
-            self._refresh_list()
-            self.video_elegido = cand
-            self._select_table_row_for_path(cand)
-            self._reproducir_elegido()
-            return True
+            if self._play_dashboard_video_fast(cand):
+                return True
         self._clear_dashboard_block_queue()
         return False
 
