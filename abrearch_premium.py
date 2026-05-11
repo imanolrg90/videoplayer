@@ -680,8 +680,8 @@ class _VideoOnlyFullscreenWindow(QWidget):
         self.video_widget.setMouseTracking(True)
         lay.addWidget(self.video_widget)
 
-        # Parent controls to video_widget so they stay above the native video surface on Windows.
-        self.controls = QFrame(self.video_widget)
+        # Keep controls docked in the fullscreen layout for reliable visibility on Windows.
+        self.controls = QFrame(self)
         self.controls.setStyleSheet(
             "QFrame#fsControls {"
             "background: rgba(15, 15, 15, 200);"
@@ -704,6 +704,8 @@ class _VideoOnlyFullscreenWindow(QWidget):
         )
         self.controls.setObjectName("fsControls")
         self.controls.setMouseTracking(True)
+        self.controls.setMinimumHeight(112)
+        self.controls.setMaximumHeight(140)
 
         ctrl_lay = QVBoxLayout(self.controls)
         ctrl_lay.setContentsMargins(14, 8, 14, 10)
@@ -770,6 +772,7 @@ class _VideoOnlyFullscreenWindow(QWidget):
         btn_row.addWidget(self.volume_slider)
 
         ctrl_lay.addLayout(btn_row)
+        lay.addWidget(self.controls)
 
         # Auto-hide timer
         self._hide_timer = QTimer(self)
@@ -814,7 +817,6 @@ class _VideoOnlyFullscreenWindow(QWidget):
 
     def _restart_controls_timer(self):
         self.controls.show()
-        self.controls.raise_()
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self._hide_timer.start()
 
@@ -826,11 +828,8 @@ class _VideoOnlyFullscreenWindow(QWidget):
                 self._restart_controls_timer()
 
     def _layout_controls(self):
-        margin = 24
-        h = 112
-        vw = self.video_widget
-        y = max(0, vw.height() - h - margin)
-        self.controls.setGeometry(margin, y, max(320, vw.width() - margin * 2), h)
+        # Controls are docked in the layout; no manual geometry needed.
+        return
 
     def eventFilter(self, obj, event):
         if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.Wheel):
@@ -844,7 +843,6 @@ class _VideoOnlyFullscreenWindow(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._layout_controls()
-        self.controls.raise_()
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
