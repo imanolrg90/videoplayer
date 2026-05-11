@@ -3533,6 +3533,8 @@ class VideoBrowserApp(QMainWindow):
         self._dashboard_wheel_targets = set()
         self._dashboard_block_queue = []
         self._dashboard_block_queue_name = ""
+        self._dashboard_prewarm_target = ""
+        self._dashboard_prewarm_thread = None
         self.duration_cache = {}
         self.idle_hash_queue = []
         self.idle_hash_in_progress = False
@@ -8875,6 +8877,7 @@ class VideoBrowserApp(QMainWindow):
     def _clear_dashboard_block_queue(self):
         self._dashboard_block_queue = []
         self._dashboard_block_queue_name = ""
+        self._dashboard_prewarm_target = ""
 
     def _collect_dashboard_block_videos(self, widget: QListWidget):
         if widget is None:
@@ -8927,6 +8930,7 @@ class VideoBrowserApp(QMainWindow):
 
         self._dashboard_block_queue = list(videos[1:])
         self._dashboard_block_queue_name = str(block_title or "Bloque")
+        self._prewarm_next_dashboard_video()
 
         first = Path(videos[0])
         self.forzar_guardado_tiempo_actual()
@@ -8948,12 +8952,53 @@ class VideoBrowserApp(QMainWindow):
         self._reproducir_elegido()
         return True
 
+    def _prewarm_video_file(self, ruta: Path, max_bytes: int = 4 * 1024 * 1024):
+        """Best-effort sequential read to warm OS file cache for faster next open."""
+        try:
+            p = Path(ruta)
+            if not p.exists() or not p.is_file():
+                return
+            remaining = max(256 * 1024, int(max_bytes or 0))
+            with open(p, "rb") as f:
+                while remaining > 0:
+                    chunk = f.read(min(512 * 1024, remaining))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+        except Exception:
+            return
+
+    def _prewarm_next_dashboard_video(self):
+        """Warm up the next queued dashboard video in a background thread."""
+        next_path = None
+        for cand in self._dashboard_block_queue:
+            p = Path(cand)
+            if p.exists() and p.suffix.lower() in EXTENSIONES_VIDEO:
+                next_path = p
+                break
+        if next_path is None:
+            self._dashboard_prewarm_target = ""
+            return
+
+        target_str = str(next_path)
+        if self._dashboard_prewarm_target == target_str:
+            return
+        running = getattr(self, "_dashboard_prewarm_thread", None)
+        if running is not None and running.is_alive():
+            return
+
+        self._dashboard_prewarm_target = target_str
+        t = threading.Thread(target=self._prewarm_video_file, args=(next_path,), daemon=True)
+        self._dashboard_prewarm_thread = t
+        t.start()
+
     def _play_next_from_dashboard_block_queue(self):
         while self._dashboard_block_queue:
             cand = Path(self._dashboard_block_queue.pop(0))
             if not cand.exists() or cand.suffix.lower() not in EXTENSIONES_VIDEO:
                 continue
             if self._play_dashboard_video_fast(cand):
+                self._prewarm_next_dashboard_video()
                 return True
         self._clear_dashboard_block_queue()
         return False
@@ -9328,6 +9373,7 @@ class VideoBrowserApp(QMainWindow):
                 if queue_candidates:
                     self._dashboard_block_queue = queue_candidates
                     self._dashboard_block_queue_name = src_widget.objectName() or "Bloque"
+                    self._prewarm_next_dashboard_video()
         if payload_type == "channel":
             ch = Path(ruta)
             ch_key = str(ch).replace('\\', '/')
