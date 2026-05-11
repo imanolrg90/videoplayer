@@ -10850,6 +10850,7 @@ class VideoBrowserApp(QMainWindow):
     def _gestionar_pares_duplicados(self, pares, titulo="Duplicado"):
         """Interactive delete/open/skip flow for duplicate pairs."""
         borrados = set()
+        auto_borrar_sugeridos = False
         for a, b in pares:
             a = Path(a)
             b = Path(b)
@@ -10864,6 +10865,15 @@ class VideoBrowserApp(QMainWindow):
                 continue
 
             sug = 1 if size_a < size_b else 2
+            if auto_borrar_sugeridos:
+                objetivo = a if sug == 1 else b
+                try:
+                    objetivo.unlink()
+                    borrados.add(objetivo)
+                except Exception as e:
+                    QMessageBox.critical(self, "Error", str(e))
+                continue
+
             msg = QMessageBox(self)
             msg.setWindowTitle(titulo)
             msg.setText(
@@ -10875,6 +10885,8 @@ class VideoBrowserApp(QMainWindow):
             )
             btn1 = msg.addButton("Borrar 1", QMessageBox.ButtonRole.AcceptRole)
             btn2 = msg.addButton("Borrar 2", QMessageBox.ButtonRole.AcceptRole)
+            btn_sug = msg.addButton("Borrar sugerido", QMessageBox.ButtonRole.AcceptRole)
+            btn_sug_all = msg.addButton("Borrar sugeridos (resto)", QMessageBox.ButtonRole.AcceptRole)
             btn_o1 = msg.addButton("Abrir 1", QMessageBox.ButtonRole.ActionRole)
             btn_o2 = msg.addButton("Abrir 2", QMessageBox.ButtonRole.ActionRole)
             msg.addButton("Saltar", QMessageBox.ButtonRole.RejectRole)
@@ -10895,6 +10907,23 @@ class VideoBrowserApp(QMainWindow):
                         borrados.add(b)
                     except Exception as e:
                         QMessageBox.critical(self, "Error", str(e))
+                    break
+                elif clicked == btn_sug:
+                    objetivo = a if sug == 1 else b
+                    try:
+                        objetivo.unlink()
+                        borrados.add(objetivo)
+                    except Exception as e:
+                        QMessageBox.critical(self, "Error", str(e))
+                    break
+                elif clicked == btn_sug_all:
+                    objetivo = a if sug == 1 else b
+                    try:
+                        objetivo.unlink()
+                        borrados.add(objetivo)
+                    except Exception as e:
+                        QMessageBox.critical(self, "Error", str(e))
+                    auto_borrar_sugeridos = True
                     break
                 elif clicked == btn_o1:
                     try:
