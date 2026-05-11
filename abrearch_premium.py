@@ -4591,6 +4591,11 @@ class VideoBrowserApp(QMainWindow):
         self.btn_repeat.setToolTip("Si está activo, al terminar el vídeo vuelve a reproducir el mismo")
         btns.addWidget(self.btn_repeat)
 
+        self.chk_autoplay_next = QCheckBox("Autoplay siguiente")
+        self.chk_autoplay_next.setChecked(True)
+        self.chk_autoplay_next.setToolTip("Si está activo, al terminar el vídeo reproduce automáticamente el siguiente")
+        btns.addWidget(self.chk_autoplay_next)
+
         self.btn_random_frame = QPushButton("🎲 Frame aleatorio")
         self.btn_random_frame.setToolTip(
             "Ir a un video aleatorio de la biblioteca y colocarlo en un frame aleatorio"
@@ -5444,10 +5449,13 @@ class VideoBrowserApp(QMainWindow):
                 if ruta:
                     self._on_play_done(ruta, t_sesion)
                 repetir_actual = bool(getattr(self, "btn_repeat", None) and self.btn_repeat.isChecked())
+                autoplay_next = bool(getattr(self, "chk_autoplay_next", None) and self.chk_autoplay_next.isChecked())
                 if repetir_actual and self.video_elegido and Path(self.video_elegido).exists():
                     QTimer.singleShot(0, lambda: self._reproducir_elegido(push_history=False))
-                else:
+                elif autoplay_next:
                     QTimer.singleShot(0, self.proximo_video)
+                else:
+                    self._notify("Fin del video (autoplay desactivado)", 1800)
             return
         if status == QMediaPlayer.MediaStatus.InvalidMedia:
             self._notify("No se pudo reproducir este video", 2500)
@@ -7992,7 +8000,22 @@ class VideoBrowserApp(QMainWindow):
                 pm.loadFromData(QByteArray(thumb_data))
                 if not pm.isNull():
                     badge = self._duration_badge_text(v) if v.suffix.lower() in EXTENSIONES_VIDEO else ""
-                    thumb_item.setIcon(self._make_youtube_thumb_icon(pm, self.tabla.iconSize(), badge_text=badge))
+                    progress_ratio = None
+                    if v.suffix.lower() in EXTENSIONES_VIDEO:
+                        dur_secs = self._duration_seconds_cached(v)
+                        if isinstance(dur_secs, int) and dur_secs > 0 and dur_secs < 10**9:
+                            progress_ratio = max(
+                                0.0,
+                                min(1.0, float(int(stats.get('tiempo_visto_seg', 0) or 0)) / float(dur_secs)),
+                            )
+                    thumb_item.setIcon(
+                        self._make_youtube_thumb_icon(
+                            pm,
+                            self.tabla.iconSize(),
+                            badge_text=badge,
+                            progress_ratio=progress_ratio,
+                        )
+                    )
             else:
                 if v.suffix.lower() in EXTENSIONES_VIDEO:
                     sin_thumb.append(v)
@@ -8367,7 +8390,21 @@ class VideoBrowserApp(QMainWindow):
                 if not pm.isNull():
                     ruta = Path(ruta_str)
                     badge = self._duration_badge_text(ruta) if ruta.suffix.lower() in EXTENSIONES_VIDEO else ""
-                    item.setIcon(self._make_youtube_thumb_icon(pm, self.tabla.iconSize(), badge_text=badge))
+                    progress_ratio = None
+                    if ruta.suffix.lower() in EXTENSIONES_VIDEO:
+                        dur_secs = self._duration_seconds_cached(ruta)
+                        if isinstance(dur_secs, int) and dur_secs > 0 and dur_secs < 10**9:
+                            stats = self.db.obtener_stats_video(ruta_str)
+                            seen_secs = int(stats.get('tiempo_visto_seg', 0) or 0)
+                            progress_ratio = max(0.0, min(1.0, float(seen_secs) / float(dur_secs)))
+                    item.setIcon(
+                        self._make_youtube_thumb_icon(
+                            pm,
+                            self.tabla.iconSize(),
+                            badge_text=badge,
+                            progress_ratio=progress_ratio,
+                        )
+                    )
                 break
 
     @pyqtSlot()
@@ -8532,17 +8569,34 @@ class VideoBrowserApp(QMainWindow):
         base = sorted(base, key=lambda v: _stats(v).get('reproducciones', 0))
         return base[:limit]
 
-    def _make_thumb_icon_for_video(self, ruta: Path, thumbs_map: dict, size: QSize):
+    def _make_thumb_icon_for_video(self, ruta: Path, thumbs_map: dict, size: QSize, watched_seconds: int | None = None):
         ruta_norm = str(ruta).replace('\\', '/')
         data = thumbs_map.get(ruta_norm)
+        progress_ratio = None
+        if watched_seconds is not None:
+            dur_secs = self._duration_seconds_cached(ruta)
+            if isinstance(dur_secs, int) and dur_secs > 0 and dur_secs < 10**9:
+                progress_ratio = max(0.0, min(1.0, float(watched_seconds) / float(dur_secs)))
         if data:
             pm = QPixmap()
             pm.loadFromData(QByteArray(data))
             if not pm.isNull():
-                return self._make_youtube_thumb_icon(pm, size, badge_text=self._duration_badge_text(ruta))
+                return self._make_youtube_thumb_icon(
+                    pm,
+                    size,
+                    badge_text=self._duration_badge_text(ruta),
+                    progress_ratio=progress_ratio,
+                )
         return self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
 
-    def _make_youtube_thumb_icon(self, source_pm: QPixmap, size: QSize, radius: int = 12, badge_text: str = ""):
+    def _make_youtube_thumb_icon(
+        self,
+        source_pm: QPixmap,
+        size: QSize,
+        radius: int = 12,
+        badge_text: str = "",
+        progress_ratio: float | None = None,
+    ):
         """Render a centered 16:9 thumb with YouTube-like rounded corners."""
         if source_pm.isNull() or size.width() <= 0 or size.height() <= 0:
             return self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
@@ -8598,6 +8652,19 @@ class VideoBrowserApp(QMainWindow):
             painter.drawRoundedRect(bx, by, badge_w, badge_h, int(4 * dpr), int(4 * dpr))
             painter.setPen(QColor("#ffffff"))
             painter.drawText(QRect(bx, by, badge_w, badge_h), Qt.AlignmentFlag.AlignCenter, badge_text)
+
+        # Progress bar at the bottom, like YouTube watched progress.
+        if progress_ratio is not None:
+            p = max(0.0, min(1.0, float(progress_ratio)))
+            if p > 0.0:
+                track_h = max(3, int(5 * dpr))
+                track_y = max(0, h - track_h)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(0, 0, 0, 110))
+                painter.drawRect(0, track_y, w, track_h)
+                fill_w = max(2, int(round(w * p)))
+                painter.setBrush(QColor("#ff0033"))
+                painter.drawRect(0, track_y, min(w, fill_w), track_h)
         painter.end()
 
         canvas.setDevicePixelRatio(dpr)
@@ -8699,10 +8766,11 @@ class VideoBrowserApp(QMainWindow):
         for v in videos:
             stats = stats_map.get(str(v).replace('\\', '/'), {}) if stats_map else {}
             repros = int(stats.get('reproducciones', 0) or 0)
-            mins = int(stats.get('tiempo_visto_seg', 0) or 0) // 60
+            seen_secs = int(stats.get('tiempo_visto_seg', 0) or 0)
+            mins = seen_secs // 60
             item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, str(v))
-            item.setIcon(self._make_thumb_icon_for_video(v, thumbs_map, icon_size))
+            item.setIcon(self._make_thumb_icon_for_video(v, thumbs_map, icon_size, watched_seconds=seen_secs))
             if text_mode == "last_seen":
                 item.setText(f"{v.name[:30]}\\n{mins} min vistos · {repros} vistas")
             elif text_mode == "discovery":
@@ -9090,7 +9158,7 @@ class VideoBrowserApp(QMainWindow):
                 seen_mins = max(0, seen_secs // 60)
                 item = QListWidgetItem()
                 item.setData(Qt.ItemDataRole.UserRole, str(v))
-                item.setIcon(self._make_thumb_icon_for_video(v, self._reco_thumb_cache, icon_size))
+                item.setIcon(self._make_thumb_icon_for_video(v, self._reco_thumb_cache, icon_size, watched_seconds=seen_secs))
                 if using_extras:
                     item.setText(f"{v.name[:34]}\n{seen_mins} min vistos · {repros} vistas")
                 else:
