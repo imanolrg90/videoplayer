@@ -680,10 +680,11 @@ class _VideoOnlyFullscreenWindow(QWidget):
         self.video_widget.setMouseTracking(True)
         lay.addWidget(self.video_widget)
 
-        self.controls = QFrame(self)
+        # Parent controls to video_widget so they stay above the native video surface on Windows.
+        self.controls = QFrame(self.video_widget)
         self.controls.setStyleSheet(
             "QFrame#fsControls {"
-            "background: rgba(15, 15, 15, 190);"
+            "background: rgba(15, 15, 15, 200);"
             "border: 1px solid rgba(255,255,255,45);"
             "border-radius: 12px;"
             "}"
@@ -697,49 +698,92 @@ class _VideoOnlyFullscreenWindow(QWidget):
             "}"
             "QPushButton:hover { background: rgba(255,255,255,40); }"
             "QSlider::groove:horizontal { height: 8px; background: rgba(255,255,255,38); border-radius: 4px; }"
+            "QSlider::sub-page:horizontal { background: rgba(255,255,255,160); border-radius: 4px; }"
             "QSlider::handle:horizontal { width: 16px; margin: -4px 0; border-radius: 8px; background: #ffffff; }"
             "QLabel { color: #fff; font-weight: 600; }"
         )
         self.controls.setObjectName("fsControls")
         self.controls.setMouseTracking(True)
-        cl = QHBoxLayout(self.controls)
-        cl.setContentsMargins(12, 10, 12, 10)
-        cl.setSpacing(10)
 
-        self.btn_fav = QPushButton("Favorito")
-        self.btn_fav.setCursor(Qt.CursorShape.PointingHandCursor)
-        cl.addWidget(self.btn_fav)
+        ctrl_lay = QVBoxLayout(self.controls)
+        ctrl_lay.setContentsMargins(14, 8, 14, 10)
+        ctrl_lay.setSpacing(6)
 
-        self.btn_delete = QPushButton("Eliminar")
-        self.btn_delete.setCursor(Qt.CursorShape.PointingHandCursor)
-        cl.addWidget(self.btn_delete)
+        # Title row
+        self.lbl_title = QLabel("")
+        self.lbl_title.setStyleSheet(
+            "color: #fff; font-size: 13px; font-weight: 700;"
+            "background: transparent; padding: 0;"
+        )
+        self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        ctrl_lay.addWidget(self.lbl_title)
 
-        self.btn_next = QPushButton("Siguiente")
-        self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
-        cl.addWidget(self.btn_next)
-
-        self.lbl_time = QLabel("00:00 / 00:00")
-        cl.addWidget(self.lbl_time)
-
+        # Seek slider row
+        seek_row = QHBoxLayout()
+        seek_row.setContentsMargins(0, 0, 0, 0)
+        seek_row.setSpacing(8)
         self.seek_slider = _SeekSlider(Qt.Orientation.Horizontal)
         self.seek_slider.setRange(0, 0)
         self.seek_slider.setMouseTracking(True)
-        cl.addWidget(self.seek_slider, 1)
+        seek_row.addWidget(self.seek_slider, 1)
+        self.lbl_time = QLabel("00:00 / 00:00")
+        self.lbl_time.setFixedWidth(130)
+        self.lbl_time.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        seek_row.addWidget(self.lbl_time)
+        ctrl_lay.addLayout(seek_row)
 
-        self.lbl_vol = QLabel("Vol")
-        cl.addWidget(self.lbl_vol)
+        # Buttons row
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(8)
+
+        self.btn_prev = QPushButton("⏮ Anterior")
+        self.btn_prev.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_row.addWidget(self.btn_prev)
+
+        self.btn_play_pause = QPushButton("⏸ Pausa")
+        self.btn_play_pause.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_row.addWidget(self.btn_play_pause)
+
+        self.btn_next = QPushButton("⏭ Siguiente")
+        self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_row.addWidget(self.btn_next)
+
+        btn_row.addStretch(1)
+
+        self.btn_fav = QPushButton("★ Favorito")
+        self.btn_fav.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_row.addWidget(self.btn_fav)
+
+        self.btn_delete = QPushButton("🗑 Eliminar")
+        self.btn_delete.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_row.addWidget(self.btn_delete)
+
+        self.lbl_vol = QLabel("🔊")
+        btn_row.addWidget(self.lbl_vol)
 
         self.volume_slider = QSlider(Qt.Orientation.Horizontal)
         self.volume_slider.setRange(0, 100)
         self.volume_slider.setValue(100)
-        self.volume_slider.setFixedWidth(160)
+        self.volume_slider.setFixedWidth(130)
         self.volume_slider.setMouseTracking(True)
-        cl.addWidget(self.volume_slider)
+        btn_row.addWidget(self.volume_slider)
 
+        ctrl_lay.addLayout(btn_row)
+
+        # Auto-hide timer
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
-        self._hide_timer.setInterval(1700)
-        self._hide_timer.timeout.connect(self.controls.hide)
+        self._hide_timer.setInterval(2500)
+        self._hide_timer.timeout.connect(self._hide_controls_and_cursor)
+
+        # Mouse-position polling timer — reliable on Windows where QVideoWidget's
+        # native surface eats mouse events before they reach Qt's event system.
+        self._last_cursor_pos = QCursor.pos()
+        self._mouse_poll_timer = QTimer(self)
+        self._mouse_poll_timer.setInterval(150)
+        self._mouse_poll_timer.timeout.connect(self._poll_mouse_pos)
+        self._mouse_poll_timer.start()
 
         for w in (
             self.video_widget,
@@ -748,6 +792,8 @@ class _VideoOnlyFullscreenWindow(QWidget):
             self.volume_slider,
             self.btn_fav,
             self.btn_delete,
+            self.btn_prev,
+            self.btn_play_pause,
             self.btn_next,
         ):
             w.installEventFilter(self)
@@ -762,16 +808,29 @@ class _VideoOnlyFullscreenWindow(QWidget):
     def _emit_closed(self):
         self.closed.emit()
 
+    def _hide_controls_and_cursor(self):
+        self.controls.hide()
+        self.setCursor(Qt.CursorShape.BlankCursor)
+
     def _restart_controls_timer(self):
         self.controls.show()
         self.controls.raise_()
+        self.setCursor(Qt.CursorShape.ArrowCursor)
         self._hide_timer.start()
+
+    def _poll_mouse_pos(self):
+        pos = QCursor.pos()
+        if pos != self._last_cursor_pos:
+            self._last_cursor_pos = pos
+            if self.geometry().contains(pos):
+                self._restart_controls_timer()
 
     def _layout_controls(self):
         margin = 24
-        h = 74
-        y = max(0, self.height() - h - margin)
-        self.controls.setGeometry(margin, y, max(220, self.width() - margin * 2), h)
+        h = 112
+        vw = self.video_widget
+        y = max(0, vw.height() - h - margin)
+        self.controls.setGeometry(margin, y, max(320, vw.width() - margin * 2), h)
 
     def eventFilter(self, obj, event):
         if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.Wheel):
@@ -795,6 +854,8 @@ class _VideoOnlyFullscreenWindow(QWidget):
         super().mouseDoubleClickEvent(event)
 
     def closeEvent(self, event):
+        self._mouse_poll_timer.stop()
+        self.setCursor(Qt.CursorShape.ArrowCursor)
         self.closed.emit()
         super().closeEvent(event)
 
@@ -3547,6 +3608,7 @@ class VideoBrowserApp(QMainWindow):
         self._window_was_maximized_before_fullscreen = False
         self._video_only_fs_window = None
         self._fs_seek_dragging = False
+        self._fs_play_pause_conn = None
         # Seek absoluto pendiente (ms) para reproducir un frame concreto al cargar el video
         self._pending_seek_ms = None
         self._pending_seek_ms_tries = 0
@@ -4374,6 +4436,7 @@ class VideoBrowserApp(QMainWindow):
             lst = QListWidget()
             lst.setViewMode(QListView.ViewMode.IconMode)
             lst.setFlow(QListView.Flow.LeftToRight)
+            lst.setObjectName(title)
             lst.setResizeMode(QListView.ResizeMode.Adjust)
             lst.setMovement(QListView.Movement.Static)
             lst.setWrapping(False)
@@ -4419,12 +4482,14 @@ class VideoBrowserApp(QMainWindow):
         block4, self.dash_unreviewed_list = _mk_dash_block("Bloque 4 · Videos sin revisar")
         block5, self.dash_channels_least_list = _mk_dash_block("Bloque 5 · Canales menos vistos (mix)")
         block6, self.dash_discovery_list = _mk_dash_block("Bloque 6 · Videos por descubrir")
+        block7, self.dash_short_list = _mk_dash_block("Bloque 7 · Videos cortos  (<1.5 min)")
         dash_col.addWidget(block1)
         dash_col.addWidget(block2)
         dash_col.addWidget(block3)
         dash_col.addWidget(block4)
         dash_col.addWidget(block5)
         dash_col.addWidget(block6)
+        dash_col.addWidget(block7)
         dash_col.addStretch()
         self.dashboard_scroll.setWidget(dash_host)
         top_layout.addWidget(self.dashboard_scroll, 1)
@@ -5351,10 +5416,30 @@ class VideoBrowserApp(QMainWindow):
         fs_window.btn_fav.clicked.connect(self.toggle_favorito_y_renombrar)
         fs_window.btn_delete.clicked.connect(self.borrar_video)
         fs_window.btn_next.clicked.connect(self.proximo_video)
-        if self.video_elegido and Path(self.video_elegido).name.lower().startswith("top "):
-            fs_window.btn_fav.setText("Quitar Top")
+        fs_window.btn_prev.clicked.connect(self.video_anterior)
+        fs_window.btn_play_pause.clicked.connect(self._toggle_pause_resume)
+        # Update play/pause button label when playback state changes
+        def _sync_fs_play_pause(state):
+            if self._video_only_fs_window is None:
+                return
+            w = self._video_only_fs_window
+            if state == QMediaPlayer.PlaybackState.PlayingState:
+                w.btn_play_pause.setText("⏸ Pausa")
+            else:
+                w.btn_play_pause.setText("▶ Reanudar")
+        self._fs_play_pause_conn = self.media_player.playbackStateChanged.connect(_sync_fs_play_pause)
+        # Set initial play/pause label
+        if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            fs_window.btn_play_pause.setText("⏸ Pausa")
         else:
-            fs_window.btn_fav.setText("Favorito")
+            fs_window.btn_play_pause.setText("▶ Reanudar")
+        # Title
+        if self.video_elegido:
+            fs_window.lbl_title.setText(Path(self.video_elegido).name)
+        if self.video_elegido and Path(self.video_elegido).name.lower().startswith("top "):
+            fs_window.btn_fav.setText("★ Quitar Top")
+        else:
+            fs_window.btn_fav.setText("★ Favorito")
         fs_window.volume_slider.setValue(self.sld_volume.value() if hasattr(self, "sld_volume") else 100)
         fs_window.volume_slider.valueChanged.connect(self._on_fs_volume_slider_changed)
         fs_window.seek_slider.sliderPressed.connect(self._on_fs_seek_slider_pressed)
@@ -5371,6 +5456,8 @@ class VideoBrowserApp(QMainWindow):
         except Exception:
             pass
         fs_window.showFullScreen()
+        QTimer.singleShot(0, fs_window._restart_controls_timer)
+        QTimer.singleShot(0, fs_window._layout_controls)
         try:
             if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
                 self.media_player.play()
@@ -5383,6 +5470,15 @@ class VideoBrowserApp(QMainWindow):
         video_widget = getattr(self, "video_widget", None)
         if video_widget is not None and video_widget.isFullScreen():
             video_widget.setFullScreen(False)
+
+        # Disconnect play/pause state signal if connected
+        conn = getattr(self, "_fs_play_pause_conn", None)
+        if conn is not None:
+            try:
+                self.media_player.playbackStateChanged.disconnect(conn)
+            except Exception:
+                pass
+            self._fs_play_pause_conn = None
 
         fs_window = self._video_only_fs_window
         self._video_only_fs_window = None
@@ -5859,10 +5955,11 @@ class VideoBrowserApp(QMainWindow):
             pass
         photo_preview_label = getattr(self, "photo_preview_label", None)
         video_widget = getattr(self, "video_widget", None)
-        if obj is self.tabla.viewport():
+        tabla = getattr(self, "tabla", None)
+        if tabla is not None and obj is tabla.viewport():
             t = event.type()
             if t == QEvent.Type.MouseMove:
-                row = self.tabla.rowAt(event.pos().y())
+                row = tabla.rowAt(event.pos().y())
                 if row >= 0 and row != self._hover_row:
                     self._stop_hover_preview()
                     self._start_hover_preview(row)
@@ -8490,6 +8587,10 @@ class VideoBrowserApp(QMainWindow):
             f"📁 {carpeta_txt}"
         )
         self.btn_fav.setText("💔 Quitar Top" if ruta.name.lower().startswith("top ") else "⭐ Favorito")
+        fsw = getattr(self, "_video_only_fs_window", None)
+        if fsw is not None:
+            fsw.lbl_title.setText(ruta.name)
+            fsw.btn_fav.setText("★ Quitar Top" if ruta.name.lower().startswith("top ") else "★ Favorito")
 
     # ── Filtros y modos ──
 
@@ -9030,6 +9131,53 @@ class VideoBrowserApp(QMainWindow):
             idx += 1
         return out
 
+    def _build_short_videos(self, pool: list, stats_map: dict, limit: int = 18) -> list:
+        """Return up to *limit* videos with duration < 90 seconds, shuffled per refresh."""
+        SHORT_SECS = 90
+        MAX_PROBE = 120  # probe at most this many uncached videos to avoid slowdown
+
+        def _cached_secs(ruta_str: str) -> int | None:
+            txt = self.duration_cache.get(ruta_str)
+            if not txt:
+                return None
+            m = re.search(r"^(\d+)m\s+(\d+)s$", str(txt).strip())
+            if m:
+                return int(m.group(1)) * 60 + int(m.group(2))
+            m2 = re.search(r"^(\d+)s$", str(txt).strip())
+            if m2:
+                return int(m2.group(1))
+            return None
+
+        out = []
+        candidates = list(pool)
+        random.shuffle(candidates)
+        probed = 0
+        for v in candidates:
+            ruta_str = str(v)
+            secs = _cached_secs(ruta_str)
+            if secs is None and self.ffprobe_path and probed < MAX_PROBE:
+                try:
+                    cmd = [
+                        self.ffprobe_path,
+                        '-v', 'error',
+                        '-show_entries', 'format=duration',
+                        '-of', 'default=noprint_wrappers=1:nokey=1',
+                        ruta_str,
+                    ]
+                    raw = float(subprocess.check_output(cmd, timeout=3).decode().strip())
+                    secs = max(0, int(raw))
+                    dm, ds = divmod(secs, 60)
+                    self.duration_cache[ruta_str] = f"{dm}m {ds}s"
+                except Exception:
+                    secs = None
+                probed += 1
+            if secs is not None and secs < SHORT_SECS:
+                out.append(v)
+            if len(out) >= limit:
+                break
+        random.shuffle(out)
+        return out
+
     def _refresh_home_dashboard(self):
         if not hasattr(self, "dash_recommended_list"):
             return
@@ -9041,6 +9189,7 @@ class VideoBrowserApp(QMainWindow):
                 self.dash_unreviewed_list,
                 self.dash_channels_least_list,
                 self.dash_discovery_list,
+                self.dash_short_list,
             ):
                 w.clear()
             return
@@ -9054,6 +9203,7 @@ class VideoBrowserApp(QMainWindow):
                 self.dash_unreviewed_list,
                 self.dash_channels_least_list,
                 self.dash_discovery_list,
+                self.dash_short_list,
             ):
                 w.clear()
             return
@@ -9127,7 +9277,9 @@ class VideoBrowserApp(QMainWindow):
             if vids:
                 channel_representatives.append(vids[0])
 
-        selected = recommended + last_seen + channels_mix + unreviewed + channels_least + discovery + channel_representatives
+        short_videos = self._build_short_videos(pool, stats_map, limit=18)
+
+        selected = recommended + last_seen + channels_mix + unreviewed + channels_least + discovery + channel_representatives + short_videos
         want_paths = [str(v) for v in selected]
         thumbs_map = self.db.obtener_miniaturas_batch(want_paths) if want_paths else {}
         self._dashboard_thumb_cache = dict(thumbs_map)
@@ -9138,6 +9290,7 @@ class VideoBrowserApp(QMainWindow):
         self._populate_dashboard_strip(self.dash_unreviewed_list, unreviewed, thumbs_map, stats_map_dash, "unreviewed")
         self._populate_dashboard_strip(self.dash_channels_least_list, channels_least, thumbs_map, stats_map_dash, "channels_least")
         self._populate_dashboard_strip(self.dash_discovery_list, discovery, thumbs_map, stats_map_dash, "discovery")
+        self._populate_dashboard_strip(self.dash_short_list, short_videos, thumbs_map, stats_map_dash, "short")
 
     def _on_dashboard_item_clicked(self, item: QListWidgetItem):
         if not item:
@@ -9147,6 +9300,29 @@ class VideoBrowserApp(QMainWindow):
             return
         self._clear_dashboard_block_queue()
         payload_type = item.data(Qt.ItemDataRole.UserRole + 1)
+        # Build a continuation queue from the same block widget, starting after the
+        # clicked item. This way pressing Siguiente after a card click still follows
+        # the block's playlist (e.g. "Videos cortos").
+        src_widget = self.sender()
+        if isinstance(src_widget, QListWidget) and payload_type != "channel":
+            clicked_idx = src_widget.row(item) if src_widget else -1
+            if clicked_idx >= 0:
+                queue_candidates = []
+                for i in range(clicked_idx + 1, src_widget.count()):
+                    it = src_widget.item(i)
+                    if it is None:
+                        continue
+                    r = it.data(Qt.ItemDataRole.UserRole)
+                    if not r:
+                        continue
+                    if it.data(Qt.ItemDataRole.UserRole + 1) == "channel":
+                        continue
+                    cand_path = Path(r)
+                    if cand_path.exists() and cand_path.suffix.lower() in EXTENSIONES_VIDEO:
+                        queue_candidates.append(cand_path)
+                if queue_candidates:
+                    self._dashboard_block_queue = queue_candidates
+                    self._dashboard_block_queue_name = src_widget.objectName() or "Bloque"
         if payload_type == "channel":
             ch = Path(ruta)
             ch_key = str(ch).replace('\\', '/')
