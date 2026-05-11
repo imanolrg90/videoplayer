@@ -3470,6 +3470,8 @@ class VideoBrowserApp(QMainWindow):
         self._dashboard_home_active = True
         self._dashboard_thumb_cache = {}
         self._dashboard_wheel_targets = set()
+        self._dashboard_block_queue = []
+        self._dashboard_block_queue_name = ""
         self.duration_cache = {}
         self.idle_hash_queue = []
         self.idle_hash_in_progress = False
@@ -4345,9 +4347,20 @@ class VideoBrowserApp(QMainWindow):
             lay = QVBoxLayout(frame)
             lay.setContentsMargins(8, 6, 8, 6)
             lay.setSpacing(6)
+
+            top_row = QHBoxLayout()
+            top_row.setContentsMargins(0, 0, 0, 0)
+            top_row.setSpacing(8)
             lbl = QLabel(title)
             lbl.setObjectName("dashboardTitle")
-            lay.addWidget(lbl)
+            top_row.addWidget(lbl, 1)
+
+            btn_play_block = QPushButton("▶ Play")
+            btn_play_block.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_play_block.setToolTip("Reproducir videos de este bloque")
+            top_row.addWidget(btn_play_block, 0, Qt.AlignmentFlag.AlignRight)
+
+            lay.addLayout(top_row)
 
             nav_row = QHBoxLayout()
             nav_row.setContentsMargins(0, 0, 0, 0)
@@ -4397,6 +4410,7 @@ class VideoBrowserApp(QMainWindow):
                 lambda _a, _b, w=lst, bl=btn_left, br=btn_right: self._sync_dashboard_nav_buttons(w, bl, br)
             )
             QTimer.singleShot(0, lambda w=lst, bl=btn_left, br=btn_right: self._sync_dashboard_nav_buttons(w, bl, br))
+            btn_play_block.clicked.connect(lambda _=False, w=lst, t=title: self._play_dashboard_block(w, t))
             return frame, lst
 
         block1, self.dash_recommended_list = _mk_dash_block("Bloque 1 · Videos recomendados")
@@ -5453,7 +5467,7 @@ class VideoBrowserApp(QMainWindow):
                 if repetir_actual and self.video_elegido and Path(self.video_elegido).exists():
                     QTimer.singleShot(0, lambda: self._reproducir_elegido(push_history=False))
                 elif autoplay_next:
-                    QTimer.singleShot(0, self.proximo_video)
+                    QTimer.singleShot(0, self._autoplay_next_video)
                 else:
                     self._notify("Fin del video (autoplay desactivado)", 1800)
             return
@@ -8757,6 +8771,92 @@ class VideoBrowserApp(QMainWindow):
             btn_right.setEnabled(has_scroll and val < hi)
             btn_right.setVisible(has_scroll)
 
+    def _clear_dashboard_block_queue(self):
+        self._dashboard_block_queue = []
+        self._dashboard_block_queue_name = ""
+
+    def _collect_dashboard_block_videos(self, widget: QListWidget):
+        if widget is None:
+            return []
+        out = []
+        seen = set()
+        channel_video_map = getattr(self, "_dashboard_channel_video_map", {}) or {}
+
+        def _push_candidate(p: Path):
+            try:
+                p = Path(p)
+            except Exception:
+                return
+            if not p.exists() or p.suffix.lower() not in EXTENSIONES_VIDEO:
+                return
+            key = str(p).replace('\\', '/')
+            if key in seen:
+                return
+            seen.add(key)
+            out.append(p)
+
+        for i in range(widget.count()):
+            item = widget.item(i)
+            if item is None:
+                continue
+            ruta = item.data(Qt.ItemDataRole.UserRole)
+            if not ruta:
+                continue
+            payload_type = item.data(Qt.ItemDataRole.UserRole + 1)
+            if payload_type == "channel":
+                ch = Path(ruta)
+                ch_key = str(ch).replace('\\', '/')
+                candidates = list(channel_video_map.get(ch_key, []))
+                if not candidates:
+                    candidates = [
+                        v for v in getattr(self, "videos_base", [])
+                        if v.exists() and v.suffix.lower() in EXTENSIONES_VIDEO and v.parent == ch
+                    ]
+                for v in candidates:
+                    _push_candidate(v)
+            else:
+                _push_candidate(Path(ruta))
+        return out
+
+    def _play_dashboard_block(self, widget: QListWidget, block_title: str = "Bloque"):
+        videos = self._collect_dashboard_block_videos(widget)
+        if not videos:
+            self._notify("Este bloque no tiene videos disponibles", 1800)
+            return
+
+        self._dashboard_block_queue = list(videos[1:])
+        self._dashboard_block_queue_name = str(block_title or "Bloque")
+
+        first = Path(videos[0])
+        self.forzar_guardado_tiempo_actual()
+        self.carpeta_actual = first.parent
+        self._show_folder_lists()
+        self._refresh_list()
+        self.video_elegido = first
+        self._select_table_row_for_path(first)
+        self._reproducir_elegido()
+        self._notify(f"Play {self._dashboard_block_queue_name}: {first.name}", 1800)
+
+    def _play_next_from_dashboard_block_queue(self):
+        while self._dashboard_block_queue:
+            cand = Path(self._dashboard_block_queue.pop(0))
+            if not cand.exists() or cand.suffix.lower() not in EXTENSIONES_VIDEO:
+                continue
+            self.carpeta_actual = cand.parent
+            self._show_folder_lists()
+            self._refresh_list()
+            self.video_elegido = cand
+            self._select_table_row_for_path(cand)
+            self._reproducir_elegido()
+            return True
+        self._clear_dashboard_block_queue()
+        return False
+
+    def _autoplay_next_video(self):
+        if self._play_next_from_dashboard_block_queue():
+            return
+        self.proximo_video()
+
     def _populate_dashboard_strip(self, widget: QListWidget, videos: list, thumbs_map: dict, stats_map: dict, text_mode: str):
         if widget is None:
             return
@@ -9045,6 +9145,7 @@ class VideoBrowserApp(QMainWindow):
         ruta = item.data(Qt.ItemDataRole.UserRole)
         if not ruta:
             return
+        self._clear_dashboard_block_queue()
         payload_type = item.data(Qt.ItemDataRole.UserRole + 1)
         if payload_type == "channel":
             ch = Path(ruta)
@@ -9195,6 +9296,7 @@ class VideoBrowserApp(QMainWindow):
         ruta = item.data(Qt.ItemDataRole.UserRole)
         if not ruta:
             return
+        self._clear_dashboard_block_queue()
         p = Path(ruta)
         if not p.exists():
             self._notify("El vídeo recomendado ya no existe", 1800)
@@ -9341,6 +9443,8 @@ class VideoBrowserApp(QMainWindow):
     def proximo_video(self):
         print("\n⏭ Siguiente pulsado")
         self.forzar_guardado_tiempo_actual()
+        if self._play_next_from_dashboard_block_queue():
+            return
         if not self.lista_actual:
             self._scan()
             if self.incluir_fotos_gestion:
@@ -9447,6 +9551,7 @@ class VideoBrowserApp(QMainWindow):
         if not self.video_elegido or not self.video_elegido.exists():
             QMessageBox.warning(self, "Error", "No hay elemento seleccionado")
             return
+        self._clear_dashboard_block_queue()
         if self.video_elegido.suffix.lower() in EXTENSIONES_IMAGEN:
             self._reproducir_foto(self.video_elegido)
             return
