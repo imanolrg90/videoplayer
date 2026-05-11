@@ -6110,6 +6110,8 @@ class VideoBrowserApp(QMainWindow):
         self.duplicate_paths = set()
         self.duplicate_map = {}
         self.duplicate_folder_prefixes = set()
+        self.duplicate_folder_prefixes_video = set()
+        self.duplicate_folder_prefixes_image = set()
         # Set de rutas conocidas (calculado en _scan) para evitar Path.exists() por archivo.
         existing = getattr(self, '_existing_paths_norm', None)
         grupos = defaultdict(list)
@@ -6141,8 +6143,14 @@ class VideoBrowserApp(QMainWindow):
         for ruta in self.duplicate_paths:
             try:
                 p = Path(ruta)
+                ext = p.suffix.lower()
                 for anc in p.parents:
-                    self.duplicate_folder_prefixes.add(str(anc).replace('\\', '/').rstrip('/'))
+                    pref = str(anc).replace('\\', '/').rstrip('/')
+                    self.duplicate_folder_prefixes.add(pref)
+                    if ext in EXTENSIONES_IMAGEN:
+                        self.duplicate_folder_prefixes_image.add(pref)
+                    elif ext in EXTENSIONES_VIDEO:
+                        self.duplicate_folder_prefixes_video.add(pref)
             except Exception:
                 continue
 
@@ -6169,7 +6177,9 @@ class VideoBrowserApp(QMainWindow):
 
     def _folder_has_duplicates(self, carpeta):
         pref = str(carpeta).replace('\\', '/').rstrip('/')
-        return pref in self.duplicate_folder_prefixes
+        if self.incluir_fotos_gestion:
+            return pref in self.duplicate_folder_prefixes_image
+        return pref in self.duplicate_folder_prefixes_video
 
     def _paint_folder_duplicate_state(self, item, has_duplicates):
         """Paint folder row red when it contains duplicates."""
@@ -7657,18 +7667,20 @@ class VideoBrowserApp(QMainWindow):
             self.carpeta_fijada = prev_fijada
 
     def _buscar_duplicados_carpeta_otras_carpetas(self, carpeta: Path):
-        """Find duplicates for videos/images in selected folder, but only in other folders."""
+        """Find duplicates in selected folder against other folders (mode-aware)."""
+        exts_objetivo = set(EXTENSIONES_IMAGEN) if self.incluir_fotos_gestion else set(EXTENSIONES_VIDEO)
+        tipo_txt = "fotos" if self.incluir_fotos_gestion else "videos"
         try:
             videos = [
                 f for f in carpeta.rglob("*")
-                if f.suffix.lower() in (EXTENSIONES_VIDEO | EXTENSIONES_IMAGEN) and f.is_file()
+                if f.suffix.lower() in exts_objetivo and f.is_file()
             ]
         except (PermissionError, OSError) as e:
             QMessageBox.critical(self, "Duplicados", f"No se pudo leer la carpeta:\n{e}")
             return
 
         if not videos:
-            QMessageBox.information(self, "Duplicados", "No hay archivos en esta carpeta.")
+            QMessageBox.information(self, "Duplicados", f"No hay {tipo_txt} en esta carpeta.")
             return
 
         rutas_carpeta = [str(v).replace('\\', '/') for v in videos]
@@ -7722,11 +7734,11 @@ class VideoBrowserApp(QMainWindow):
 
         resto_videos = len(resultados) - max_videos
         if resto_videos > 0:
-            lineas.append(f"... y {resto_videos} videos más")
+            lineas.append(f"... y {resto_videos} {tipo_txt} más")
 
         mensaje = (
             f"Carpeta: {carpeta.name}\n"
-            f"Videos con duplicados fuera de esta carpeta: {len(resultados)}\n"
+            f"{tipo_txt.capitalize()} con duplicados fuera de esta carpeta: {len(resultados)}\n"
             f"Coincidencias totales en otras carpetas: {total_coincidencias}\n\n"
             + "\n".join(lineas)
         )
@@ -10908,6 +10920,54 @@ class VideoBrowserApp(QMainWindow):
             carpeta = self.ruta_raiz
         else:
             QMessageBox.warning(self, "Sin carpeta", "No hay carpeta seleccionada.")
+            return
+
+        # En modo "Solo fotos", gestiona duplicados usando hashes visuales de imágenes.
+        if self.incluir_fotos_gestion:
+            try:
+                fotos = [f for f in carpeta.rglob("*") if f.suffix.lower() in EXTENSIONES_IMAGEN and f.is_file()]
+            except (PermissionError, OSError) as e:
+                QMessageBox.critical(self, "Duplicados", f"No se pudo leer la carpeta:\n{e}")
+                return
+
+            if len(fotos) < 2:
+                QMessageBox.information(self, "Sin duplicados", "No hay suficientes fotos.")
+                return
+
+            rutas_fotos = [str(f).replace('\\', '/') for f in fotos]
+            pendientes_hash = [r for r in rutas_fotos if not self.db.tiene_hash(r)]
+            total_pendientes = len(pendientes_hash)
+            if total_pendientes:
+                for i, ruta in enumerate(pendientes_hash):
+                    self._set_progress(i, total_pendientes, f"Hasheando foto: {Path(ruta).name}")
+                    _calcular_hash_archivo(ruta)
+                self._hide_progress()
+
+            self._rebuild_duplicate_index()
+
+            pares = []
+            for ruta in rutas_fotos:
+                for dup in self.duplicate_map.get(ruta, []):
+                    if Path(dup).suffix.lower() in EXTENSIONES_IMAGEN:
+                        pares.append((Path(ruta), Path(dup)))
+            # Evita pares repetidos A-B / B-A.
+            pares_unicos = []
+            vistos = set()
+            for a, b in pares:
+                k = tuple(sorted((str(a), str(b))))
+                if k in vistos:
+                    continue
+                vistos.add(k)
+                pares_unicos.append((a, b))
+
+            if not pares_unicos:
+                QMessageBox.information(self, "Sin duplicados", "No se encontraron duplicados entre fotos.")
+                return
+
+            borrados_n = self._gestionar_pares_duplicados(pares_unicos, titulo="Duplicado de foto en carpeta")
+            self._scan()
+            self._refresh_list()
+            QMessageBox.information(self, "Listo", f"Duplicados eliminados: {borrados_n}")
             return
 
         modo, ok = QInputDialog.getItem(self, "Tipo de búsqueda", "Elige:",
