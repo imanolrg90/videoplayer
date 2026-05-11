@@ -3533,6 +3533,10 @@ class VideoBrowserApp(QMainWindow):
         self._dashboard_block_queue_name = ""
         self._dashboard_prewarm_target = ""
         self._dashboard_prewarm_thread = None
+        self._preview_10s_queue: list = []
+        self._preview_10s_active: bool = False
+        self._preview_10s_timer: "QTimer | None" = None
+        self._preview_10s_seek_ms: int = 0
         self.duration_cache = {}
         self.idle_hash_queue = []
         self.idle_hash_in_progress = False
@@ -4422,6 +4426,11 @@ class VideoBrowserApp(QMainWindow):
             btn_play_block.setToolTip("Reproducir videos de este bloque")
             top_row.addWidget(btn_play_block, 0, Qt.AlignmentFlag.AlignRight)
 
+            btn_10s = QPushButton("▶ 10s")
+            btn_10s.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_10s.setToolTip("Reproducir 10 segundos de cada vídeo del bloque en posición aleatoria")
+            top_row.addWidget(btn_10s, 0, Qt.AlignmentFlag.AlignRight)
+
             lay.addLayout(top_row)
 
             nav_row = QHBoxLayout()
@@ -4474,6 +4483,7 @@ class VideoBrowserApp(QMainWindow):
             )
             QTimer.singleShot(0, lambda w=lst, bl=btn_left, br=btn_right: self._sync_dashboard_nav_buttons(w, bl, br))
             btn_play_block.clicked.connect(lambda _=False, w=lst, t=title: self._play_dashboard_block(w, t))
+            btn_10s.clicked.connect(lambda _=False, w=lst, t=title: self._play_block_10s_preview(w, t))
             return frame, lst
 
         block1, self.dash_recommended_list = _mk_dash_block("Bloque 1 · Videos recomendados")
@@ -8921,6 +8931,7 @@ class VideoBrowserApp(QMainWindow):
         return out
 
     def _play_dashboard_block(self, widget: QListWidget, block_title: str = "Bloque"):
+        self._stop_10s_preview()
         videos = self._collect_dashboard_block_videos(widget)
         if not videos:
             self._notify("Este bloque no tiene videos disponibles", 1800)
@@ -9005,6 +9016,77 @@ class VideoBrowserApp(QMainWindow):
         if self._play_next_from_dashboard_block_queue():
             return
         self.proximo_video()
+
+    # ------------------------------------------------------------------ 10s preview
+    def _stop_10s_preview(self):
+        """Cancel any running 10s-preview session."""
+        self._preview_10s_active = False
+        if self._preview_10s_timer is not None:
+            try:
+                self._preview_10s_timer.stop()
+                self._preview_10s_timer.deleteLater()
+            except Exception:
+                pass
+            self._preview_10s_timer = None
+        self._preview_10s_queue = []
+
+    def _play_block_10s_preview(self, widget: "QListWidget", block_title: str = "Bloque"):
+        """Play 10 seconds from a random position for every video in the block."""
+        videos = self._collect_dashboard_block_videos(widget)
+        if not videos:
+            self._notify("Este bloque no tiene vídeos disponibles", 1800)
+            return
+        self._stop_10s_preview()
+        self._clear_dashboard_block_queue()
+        random.shuffle(videos)
+        self._preview_10s_queue = list(videos)
+        self._preview_10s_active = True
+        self._notify(f"▶ 10s · {block_title} ({len(videos)} vídeos)", 2200)
+        self._advance_10s_preview()
+
+    def _advance_10s_preview(self):
+        """Load next video in the 10s-preview queue and schedule advance."""
+        if not self._preview_10s_active:
+            return
+        while self._preview_10s_queue:
+            ruta = Path(self._preview_10s_queue.pop(0))
+            if not ruta.exists() or ruta.suffix.lower() not in EXTENSIONES_VIDEO:
+                continue
+            # Determine a random seek position leaving 12s before end.
+            dur_secs = self._duration_seconds_cached(ruta)
+            if isinstance(dur_secs, int) and dur_secs > 15 and dur_secs < 10 ** 9:
+                max_start = max(0, dur_secs - 12)
+                seek_s = random.randint(0, max_start)
+            else:
+                seek_s = 0
+            seek_ms = seek_s * 1000
+            self._preview_10s_seek_ms = seek_ms
+            # Start playback.
+            self.carpeta_actual = ruta.parent
+            self._show_folder_lists()
+            if hasattr(self, "lbl_folder"):
+                self.lbl_folder.setText(f"{ruta.parent.name}  —  preview 10s")
+            self.video_elegido = ruta
+            self._select_table_row_for_path(ruta)
+            self._reproducir_elegido()
+            # Seek to random position ~600 ms after play starts.
+            if seek_ms > 0:
+                QTimer.singleShot(
+                    600,
+                    lambda ms=seek_ms: (
+                        self.media_player.setPosition(ms) if self._preview_10s_active else None
+                    ),
+                )
+            # Schedule advance to next video after 10.6 s.
+            self._preview_10s_timer = QTimer(self)
+            self._preview_10s_timer.setSingleShot(True)
+            self._preview_10s_timer.timeout.connect(self._advance_10s_preview)
+            self._preview_10s_timer.start(10_600)
+            return
+        # Queue exhausted.
+        self._stop_10s_preview()
+        self._notify("Preview 10s finalizado", 1800)
+    # ------------------------------------------------------------------ /10s preview
 
     def _populate_dashboard_strip(self, widget: QListWidget, videos: list, thumbs_map: dict, stats_map: dict, text_mode: str):
         if widget is None:
@@ -9346,6 +9428,7 @@ class VideoBrowserApp(QMainWindow):
         ruta = item.data(Qt.ItemDataRole.UserRole)
         if not ruta:
             return
+        self._stop_10s_preview()
         self._clear_dashboard_block_queue()
         payload_type = item.data(Qt.ItemDataRole.UserRole + 1)
         # Build a continuation queue from the same block widget, starting after the
