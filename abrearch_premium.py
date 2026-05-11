@@ -342,9 +342,13 @@ class ThumbnailThread(QThread):
         super().__init__()
         self.rutas = rutas
         self._stop_flag = False
+        ffmpeg_candidate = ""
         if ffprobe_path:
-            self.ffmpeg_path = ffprobe_path.replace('ffprobe', 'ffmpeg')
+            ffmpeg_candidate = ffprobe_path.replace('ffprobe', 'ffmpeg')
+        if ffmpeg_candidate and Path(ffmpeg_candidate).exists():
+            self.ffmpeg_path = ffmpeg_candidate
         else:
+            # Fallback to ffmpeg from PATH when paired binary is unavailable.
             self.ffmpeg_path = 'ffmpeg'
 
     def run(self):
@@ -3598,7 +3602,8 @@ class VideoBrowserApp(QMainWindow):
         self._tree_chunk_target_ms = 24.0
         self.thumb_total = 0
         self.thumb_done = 0
-        self._thumbs_stop = True
+        # Regular table thumbnails should be generated unless explicitly stopped.
+        self._thumbs_stop = False
         self._suggestions_stop = True
         self._folder_suggest_thread = None
         self._folder_suggestion_queue = {}
