@@ -8980,7 +8980,7 @@ class VideoBrowserApp(QMainWindow):
             k: list(vs) for k, vs in channel_video_map.items()
         }
 
-        recommended = sorted(
+        recommended_pool = sorted(
             pool,
             key=lambda v: (
                 0 if v.name.lower().startswith("top ") else 1,
@@ -8988,7 +8988,15 @@ class VideoBrowserApp(QMainWindow):
                 -int(stats_map.get(str(v).replace('\\', '/'), {}).get('reproducciones', 0) or 0),
                 v.name.lower(),
             ),
-        )[:18]
+        )
+        # Bloque 1: variación constante para evitar ver siempre los mismos.
+        # Tomamos una bolsa amplia de candidatos "buenos" y elegimos 18 al azar.
+        reco_candidates = recommended_pool[: max(18, min(len(recommended_pool), 120))]
+        if len(reco_candidates) <= 18:
+            recommended = list(reco_candidates)
+            random.shuffle(recommended)
+        else:
+            recommended = random.sample(reco_candidates, 18)
 
         last_seen = sorted(
             [
