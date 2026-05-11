@@ -4253,6 +4253,10 @@ class VideoBrowserApp(QMainWindow):
         self.lbl_pending_ops.setObjectName("count")
         self.lbl_pending_ops.setToolTip("Operaciones diferidas para aplicar al iniciar la app")
         bar.addWidget(self.lbl_pending_ops)
+        self.btn_run_pending_ops = QPushButton("▶ Ejecutar pendientes")
+        self.btn_run_pending_ops.setToolTip("Ejecuta ahora las operaciones diferidas de inicio")
+        self.btn_run_pending_ops.clicked.connect(self._run_pending_ops_now)
+        bar.addWidget(self.btn_run_pending_ops)
         root.addLayout(bar)
 
         # -- buscador --
@@ -10247,6 +10251,23 @@ class VideoBrowserApp(QMainWindow):
             c1["rwd"], c1["borrar"], c1["top"], c1["meta"],
         )
 
+    def _run_pending_ops_now(self):
+        """Run startup-deferred operations immediately from UI."""
+        c0 = self._pending_ops_counts()
+        total0 = c0["rwd"] + c0["borrar"] + c0["top"] + c0["meta"]
+        if total0 <= 0:
+            self._refresh_pending_ops_badge()
+            self._notify("No hay tareas pendientes", 1800)
+            return
+
+        self._notify("Ejecutando tareas pendientes...", 1800)
+        QApplication.processEvents()
+        self._run_startup_deferred_renames()
+        c1 = self._pending_ops_counts()
+        total1 = c1["rwd"] + c1["borrar"] + c1["top"] + c1["meta"]
+        aplicadas = max(0, total0 - total1)
+        self._notify(f"Pendientes ejecutadas: {aplicadas} | restantes: {total1}", 3200)
+
     def _pending_ops_counts(self):
         """Return counts of deferred ops scheduled for next startup."""
         try:
@@ -10268,6 +10289,8 @@ class VideoBrowserApp(QMainWindow):
             return
         c = self._pending_ops_counts()
         total = c["rwd"] + c["borrar"] + c["top"] + c["meta"]
+        if hasattr(self, "btn_run_pending_ops"):
+            self.btn_run_pending_ops.setEnabled(total > 0)
         if total <= 0:
             self.lbl_pending_ops.setText("Pendientes inicio: 0")
             self.lbl_pending_ops.setToolTip("No hay operaciones diferidas")
@@ -10480,8 +10503,6 @@ class VideoBrowserApp(QMainWindow):
                 fav_failed += 1
                 LOGGER.warning("Startup deferred fav OS error: %s -> %s", old_norm, new_norm)
             except Exception:
-                self._pending_fav_renames.pop(old_norm, None)
-                changed = True
                 fav_failed += 1
                 LOGGER.exception("Startup deferred fav failed: %s -> %s", old_norm, new_norm)
 
@@ -10511,8 +10532,6 @@ class VideoBrowserApp(QMainWindow):
                 del_failed += 1
                 LOGGER.warning("Startup deferred delete OS error: %s", ruta_norm)
             except Exception:
-                self._pending_delete_paths.discard(ruta_norm)
-                changed = True
                 del_failed += 1
                 LOGGER.exception("Startup deferred delete failed: %s", ruta_norm)
 
