@@ -10233,21 +10233,23 @@ class VideoBrowserApp(QMainWindow):
         )
         self._refresh_pending_ops_badge()
 
-    def _run_startup_deferred_renames(self):
+    def _run_startup_deferred_renames(self, trigger="startup"):
         """Run all deferred photo/file rename operations scheduled for startup."""
         c0 = self._pending_ops_counts()
         LOGGER.info(
-            "Startup deferred ops begin: rwd=%d borrar=%d top=%d meta=%d",
+            "Deferred ops begin (%s): rwd=%d borrar=%d top=%d meta=%d",
+            trigger,
             c0["rwd"], c0["borrar"], c0["top"], c0["meta"],
         )
         self._retry_persisted_rwd_renames_on_startup()
         self._retry_photo_fav_renames_on_startup()
-        self._retry_pending_file_ops()
+        self._retry_pending_file_ops(trigger=trigger)
         self._process_pending_metadata_sync_on_startup()
         self._refresh_pending_ops_badge()
         c1 = self._pending_ops_counts()
         LOGGER.info(
-            "Startup deferred ops end: rwd=%d borrar=%d top=%d meta=%d",
+            "Deferred ops end (%s): rwd=%d borrar=%d top=%d meta=%d",
+            trigger,
             c1["rwd"], c1["borrar"], c1["top"], c1["meta"],
         )
 
@@ -10262,7 +10264,7 @@ class VideoBrowserApp(QMainWindow):
 
         self._notify("Ejecutando tareas pendientes...", 1800)
         QApplication.processEvents()
-        self._run_startup_deferred_renames()
+        self._run_startup_deferred_renames(trigger="manual_button")
         c1 = self._pending_ops_counts()
         total1 = c1["rwd"] + c1["borrar"] + c1["top"] + c1["meta"]
         aplicadas = max(0, total0 - total1)
@@ -10433,8 +10435,8 @@ class VideoBrowserApp(QMainWindow):
         self._pending_delete_paths.add(ruta_norm)
         self._save_pending_file_ops()
         self._refresh_pending_ops_badge()
-        if error_msg:
-            LOGGER.warning("Delete queued for retry: %s (%s)", ruta_norm, error_msg)
+        motivo = error_msg or "manual_queue"
+        LOGGER.info("Deferred delete queued: %s (%s)", ruta_norm, motivo)
 
     def _queue_fav_retry(self, old_path: Path, new_path: Path, error_msg: str = ""):
         try:
@@ -10448,10 +10450,10 @@ class VideoBrowserApp(QMainWindow):
         if error_msg:
             LOGGER.warning("Favorite rename queued for retry: %s -> %s (%s)", old_norm, new_norm, error_msg)
 
-    def _retry_pending_file_ops(self):
+    def _retry_pending_file_ops(self, trigger="startup"):
         if not self._pending_delete_paths and not self._pending_fav_renames:
             self._pending_file_ops_timer.stop()
-            LOGGER.info("Startup deferred file-ops: no pending delete/top entries")
+            LOGGER.info("Deferred file-ops (%s): no pending delete/top entries", trigger)
             return
 
         changed = False
@@ -10516,7 +10518,7 @@ class VideoBrowserApp(QMainWindow):
                 self._pending_delete_paths.discard(ruta_norm)
                 changed = True
                 del_skipped += 1
-                LOGGER.info("Startup deferred delete skip missing: %s", ruta_norm)
+                LOGGER.info("Deferred delete skipped missing (%s): %s", trigger, ruta_norm)
                 continue
             try:
                 p.unlink()
@@ -10527,13 +10529,13 @@ class VideoBrowserApp(QMainWindow):
                 self._pending_delete_paths.discard(ruta_norm)
                 changed = True
                 del_applied += 1
-                LOGGER.info("Startup deferred delete applied: %s", ruta_norm)
+                LOGGER.info("Deferred delete applied (%s): %s", trigger, ruta_norm)
             except OSError:
                 del_failed += 1
-                LOGGER.warning("Startup deferred delete OS error: %s", ruta_norm)
+                LOGGER.warning("Deferred delete OS error (%s): %s", trigger, ruta_norm)
             except Exception:
                 del_failed += 1
-                LOGGER.exception("Startup deferred delete failed: %s", ruta_norm)
+                LOGGER.exception("Deferred delete failed (%s): %s", trigger, ruta_norm)
 
         if changed:
             self._save_pending_file_ops()
@@ -10546,7 +10548,8 @@ class VideoBrowserApp(QMainWindow):
             self._refresh_pending_ops_badge()
 
         LOGGER.info(
-            "Startup deferred file-ops summary: fav_applied=%d fav_skipped=%d fav_failed=%d del_applied=%d del_skipped=%d del_failed=%d remaining_fav=%d remaining_del=%d",
+            "Deferred file-ops summary (%s): fav_applied=%d fav_skipped=%d fav_failed=%d del_applied=%d del_skipped=%d del_failed=%d remaining_fav=%d remaining_del=%d",
+            trigger,
             fav_applied, fav_skipped, fav_failed,
             del_applied, del_skipped, del_failed,
             len(self._pending_fav_renames), len(self._pending_delete_paths),
@@ -10799,7 +10802,7 @@ class VideoBrowserApp(QMainWindow):
                 if ruta_borrada.suffix.lower() in EXTENSIONES_IMAGEN:
                     self._release_photo_preview_file_handle()
                 self._queue_delete_retry(ruta_borrada, "deferred_delete")
-                self._notify("Borrado guardado para aplicar al iniciar la app", 3500)
+                self._notify("Borrado guardado: se aplicará al iniciar o con 'Ejecutar pendientes'", 4000)
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
 
