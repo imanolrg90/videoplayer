@@ -3574,6 +3574,7 @@ class VideoBrowserApp(QMainWindow):
         self._preview_10s_active: bool = False
         self._preview_10s_timer: "QTimer | None" = None
         self._preview_10s_seek_ms: int = 0
+        self._preview_10s_block_title: str | None = None
         self.duration_cache = {}
         self.idle_hash_queue = []
         self.idle_hash_in_progress = False
@@ -4795,6 +4796,7 @@ class VideoBrowserApp(QMainWindow):
         QShortcut(QKeySequence("Shift+F5"), self, activated=self.refrescar_carpeta_actual)
         QShortcut(QKeySequence("Ctrl+F"), self, activated=self.search_box.setFocus)
         QShortcut(QKeySequence("Ctrl+J"), self, activated=self.ir_a_frame_aleatorio_biblioteca)
+        QShortcut(QKeySequence("Ctrl+Shift+X"), self, activated=self._cancel_10s_preview_shortcut)
         QShortcut(QKeySequence("Ctrl+Alt+L"), self, activated=self._toggle_privacy_lock)
         QShortcut(QKeySequence("Enter"), self, activated=self.reproducir_video_actual)
         QShortcut(QKeySequence("Return"), self, activated=self.reproducir_video_actual)
@@ -9083,9 +9085,21 @@ class VideoBrowserApp(QMainWindow):
                 pass
             self._preview_10s_timer = None
         self._preview_10s_queue = []
+        self._preview_10s_block_title = None
+
+    def _cancel_10s_preview_shortcut(self):
+        """Stop the active 10s preview from the keyboard without interrupting current playback."""
+        if not self._preview_10s_active:
+            return
+        self._stop_10s_preview()
+        self._notify("Preview 10s desactivado (Ctrl+Shift+X)", 1800)
 
     def _play_block_10s_preview(self, widget: "QListWidget", block_title: str = "Bloque"):
         """Play 10 seconds from a random position for every video in the block."""
+        if self._preview_10s_active and self._preview_10s_block_title == block_title:
+            self._stop_10s_preview()
+            self._notify("Preview 10s desactivado", 1800)
+            return
         videos = self._collect_dashboard_block_videos(widget)
         if not videos:
             self._notify("Este bloque no tiene vídeos disponibles", 1800)
@@ -9095,6 +9109,7 @@ class VideoBrowserApp(QMainWindow):
         random.shuffle(videos)
         self._preview_10s_queue = list(videos)
         self._preview_10s_active = True
+        self._preview_10s_block_title = block_title
         self._notify(f"▶ 10s · {block_title} ({len(videos)} vídeos)", 2200)
         self._advance_10s_preview()
 
