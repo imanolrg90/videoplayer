@@ -3687,9 +3687,6 @@ class VideoBrowserApp(QMainWindow):
         self._photo_preview_pm = None
         self._play_history = []
         self._play_history_idx = -1
-        self._cleanup_review_active = False
-        self._cleanup_review_queue = []
-        self._cleanup_review_token = 0
 
         self._build_ui()
         self._setup_app_icon()
@@ -4780,12 +4777,6 @@ class VideoBrowserApp(QMainWindow):
         )
         self.btn_random_frame.clicked.connect(self.ir_a_frame_aleatorio_biblioteca)
         btns.addWidget(self.btn_random_frame)
-
-        self.btn_cleanup = QPushButton("🧹 Limpiar")
-        self.btn_cleanup.setCheckable(True)
-        self.btn_cleanup.setToolTip("Revisar vídeos con menos vistas/tiempo para borrar rápidamente")
-        self.btn_cleanup.clicked.connect(self._toggle_cleanup_review)
-        btns.addWidget(self.btn_cleanup)
 
         self.chk_random_start_play = QCheckBox("Play")
         self.chk_random_start_play.setToolTip(
@@ -10138,114 +10129,6 @@ class VideoBrowserApp(QMainWindow):
             if self.video_elegido in self.lista_actual:
                 self.lista_actual.remove(self.video_elegido)
         self._reproducir_elegido()
-
-    def _sync_cleanup_button(self):
-        if not hasattr(self, "btn_cleanup") or self.btn_cleanup is None:
-            return
-        self.btn_cleanup.blockSignals(True)
-        self.btn_cleanup.setChecked(self._cleanup_review_active)
-        self.btn_cleanup.setText("■ Limpiando" if self._cleanup_review_active else "🧹 Limpiar")
-        self.btn_cleanup.blockSignals(False)
-
-    def _stop_cleanup_review(self, notify=False):
-        self._cleanup_review_active = False
-        self._cleanup_review_queue = []
-        self._cleanup_review_token += 1
-        self._sync_cleanup_button()
-        if notify:
-            self._notify("Limpieza detenida", 1800)
-
-    def _toggle_cleanup_review(self, checked=None):
-        if checked is None:
-            checked = not self._cleanup_review_active
-        if not checked:
-            self._stop_cleanup_review(notify=True)
-            return
-
-        pool = [
-            v for v in getattr(self, "videos_base", [])
-            if isinstance(v, Path) and v.exists() and v.suffix.lower() in EXTENSIONES_VIDEO
-        ]
-        if not pool:
-            self._stop_cleanup_review(notify=False)
-            self._notify("No hay vídeos para limpiar", 2000)
-            return
-
-        stats_map = self.db.obtener_stats_batch([str(v) for v in pool])
-
-        def _score(v):
-            st = stats_map.get(str(v).replace('\\', '/'), {})
-            views = int(st.get('reproducciones', 0) or 0)
-            secs = int(st.get('tiempo_visto_seg', 0) or 0)
-            return (views, secs, v.name.lower())
-
-        ordered = sorted(pool, key=_score)
-        self._cleanup_review_queue = list(ordered)
-        self._cleanup_review_active = True
-        self._cleanup_review_token += 1
-        self._stop_10s_preview()
-        self._stop_player_autonext(notify=False)
-        self._clear_dashboard_block_queue()
-        self._sync_cleanup_button()
-        self._notify(f"Limpieza iniciada: {len(self._cleanup_review_queue)} vídeos", 2200)
-        self._advance_cleanup_review()
-
-    def _advance_cleanup_review(self):
-        if not self._cleanup_review_active:
-            return
-        while self._cleanup_review_queue:
-            cand = Path(self._cleanup_review_queue.pop(0))
-            if not cand.exists() or cand.suffix.lower() not in EXTENSIONES_VIDEO:
-                continue
-            self.forzar_guardado_tiempo_actual()
-            self.video_elegido = cand
-            self._reproducir_elegido()
-            token = self._cleanup_review_token
-            QTimer.singleShot(550, lambda t=token, r=str(cand): self._prompt_cleanup_review_decision(t, r))
-            return
-        self._stop_cleanup_review(notify=False)
-        self._notify("Limpieza finalizada", 2200)
-
-    def _prompt_cleanup_review_decision(self, token, ruta_str):
-        if not self._cleanup_review_active or token != self._cleanup_review_token:
-            return
-        ruta = Path(ruta_str)
-        actual = Path(self.video_elegido) if self.video_elegido else None
-        if actual is None or str(actual) != str(ruta):
-            return
-
-        st = self.db.obtener_stats_video(str(ruta))
-        views = int(st.get('reproducciones', 0) or 0)
-        secs = int(st.get('tiempo_visto_seg', 0) or 0)
-        mins = secs // 60
-
-        box = QMessageBox(self)
-        box.setWindowTitle("Limpieza rápida")
-        box.setIcon(QMessageBox.Icon.Question)
-        box.setText(
-            f"{ruta.name}\n"
-            f"Vistas: {views} · Tiempo: {mins} min\n\n"
-            f"¿Quieres borrarlo?"
-        )
-        btn_delete = box.addButton("Borrar + Siguiente", QMessageBox.ButtonRole.AcceptRole)
-        btn_keep = box.addButton("Conservar + Siguiente", QMessageBox.ButtonRole.RejectRole)
-        btn_stop = box.addButton("Parar limpieza", QMessageBox.ButtonRole.DestructiveRole)
-        box.setDefaultButton(btn_delete)
-        box.exec()
-
-        if not self._cleanup_review_active or token != self._cleanup_review_token:
-            return
-        clicked = box.clickedButton()
-        if clicked == btn_stop or clicked is None:
-            self._stop_cleanup_review(notify=True)
-            return
-        if clicked == btn_delete:
-            self._queue_delete_retry(ruta, "cleanup_review")
-            self._notify(f"Marcado para borrar: {ruta.name}", 1200)
-        elif not self._is_video_revisado(ruta):
-            self._queue_rwd_startup_only(ruta, "cleanup_review_keep")
-            self._notify(f"Marcado como revisado: {ruta.name}", 1200)
-        QTimer.singleShot(0, self._advance_cleanup_review)
 
     def forzar_guardado_tiempo_actual(self):
         self._cancel_photo_autonext()
