@@ -10144,7 +10144,6 @@ class VideoBrowserApp(QMainWindow):
                 ruta_final = str(self.video_elegido if self.video_elegido else video_anterior)
                 stats = self.db.obtener_stats_video(ruta_final)
                 self._queue_metadata_sync_path(ruta_final)
-                self._launch_meta_check_for_video(Path(ruta_final), source="play_forzado")
                 print(f"💾 Guardado (forzado): {video_anterior.name} → {Path(ruta_final).name} (+{t_sesion}s, repro={stats['reproducciones']}, primera={primera})")
                 checkpoint_folder = (self.video_elegido if self.video_elegido else video_anterior).parent
             else:
@@ -10166,7 +10165,6 @@ class VideoBrowserApp(QMainWindow):
                 ruta_final = str(self.video_elegido if self.video_elegido else video_anterior)
                 stats = self.db.obtener_stats_video(ruta_final)
                 self._queue_metadata_sync_path(ruta_final)
-                self._launch_meta_check_for_video(Path(ruta_final), source="play_forzado")
                 print(f"💾 Guardado (forzado): {video_anterior.name} → {Path(ruta_final).name} (+{t_sesion}s, repro={stats['reproducciones']}, primera={primera})")
                 checkpoint_folder = (self.video_elegido if self.video_elegido else video_anterior).parent
 
@@ -10342,7 +10340,6 @@ class VideoBrowserApp(QMainWindow):
         nombre_final = self.video_elegido.name  # capturar antes de que _refresh_list lo anule
         stats = self.db.obtener_stats_video(ruta_final)
         self._queue_metadata_sync_path(ruta_final)
-        self._launch_meta_check_for_video(Path(ruta_final), source="play_end")
         self._log_playback_checkpoint(self.video_elegido.parent, "playback_end")
         self._refresh_list()
         self.player_thread = None
