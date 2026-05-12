@@ -3575,6 +3575,8 @@ class VideoBrowserApp(QMainWindow):
         self._preview_10s_timer: "QTimer | None" = None
         self._preview_10s_seek_ms: int = 0
         self._preview_10s_block_title: str | None = None
+        self._player_autonext_active: bool = False
+        self._player_autonext_timer: "QTimer | None" = None
         self.duration_cache = {}
         self.idle_hash_queue = []
         self.idle_hash_in_progress = False
@@ -4679,6 +4681,28 @@ class VideoBrowserApp(QMainWindow):
         self.cmb_seek_step.setCurrentIndex(idx_5 if idx_5 >= 0 else 0)
         self.cmb_seek_step.setMinimumWidth(74)
         player_row.addWidget(self.cmb_seek_step)
+        self.lbl_player_autonext = QLabel("Auto sig.:")
+        self.lbl_player_autonext.setObjectName("count")
+        player_row.addWidget(self.lbl_player_autonext)
+        self.cmb_player_autonext = QComboBox()
+        self.cmb_player_autonext.setEditable(True)
+        self.cmb_player_autonext.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.cmb_player_autonext.setToolTip("Segundos para saltar automáticamente al siguiente vídeo. Puedes elegir 10, 20 o escribir X.")
+        for sec in (10, 20, 30, 60):
+            self.cmb_player_autonext.addItem(f"{sec}s", sec)
+        if self.cmb_player_autonext.lineEdit() is not None:
+            self.cmb_player_autonext.lineEdit().setPlaceholderText("Xs")
+            self.cmb_player_autonext.lineEdit().editingFinished.connect(self._on_player_autonext_step_changed)
+        idx_10 = self.cmb_player_autonext.findData(10)
+        self.cmb_player_autonext.setCurrentIndex(idx_10 if idx_10 >= 0 else 0)
+        self.cmb_player_autonext.setMinimumWidth(78)
+        self.cmb_player_autonext.currentIndexChanged.connect(lambda _idx: self._on_player_autonext_step_changed())
+        player_row.addWidget(self.cmb_player_autonext)
+        self.btn_player_autonext = QPushButton("▶ Auto 10s")
+        self.btn_player_autonext.setCheckable(True)
+        self.btn_player_autonext.setToolTip("Activar o desactivar el salto automático al siguiente vídeo usando los segundos elegidos")
+        self.btn_player_autonext.clicked.connect(self._toggle_player_autonext)
+        player_row.addWidget(self.btn_player_autonext)
         lbl_vol = QLabel("🔊")
         lbl_vol.setObjectName("count")
         player_row.addWidget(lbl_vol)
@@ -5300,6 +5324,20 @@ class VideoBrowserApp(QMainWindow):
             pass
         return 5
 
+    def _get_player_autonext_seconds(self):
+        try:
+            if hasattr(self, "cmb_player_autonext") and self.cmb_player_autonext is not None:
+                v = self.cmb_player_autonext.currentData()
+                if v is not None:
+                    return max(1, int(v))
+                txt = self.cmb_player_autonext.currentText()
+                custom_v = self._parse_seek_step_value(txt)
+                if custom_v is not None:
+                    return custom_v
+        except Exception:
+            pass
+        return 10
+
     def _parse_seek_step_value(self, value):
         text = str(value or "").strip().lower()
         if not text:
@@ -5322,6 +5360,90 @@ class VideoBrowserApp(QMainWindow):
             self.cmb_seek_step.setCurrentIndex(idx)
             return
         self.cmb_seek_step.setEditText(f"{step}s")
+
+    def _on_player_autonext_step_changed(self):
+        if not hasattr(self, "cmb_player_autonext") or self.cmb_player_autonext is None:
+            return
+        step = self._parse_seek_step_value(self.cmb_player_autonext.currentData())
+        if step is None:
+            step = self._parse_seek_step_value(self.cmb_player_autonext.currentText())
+        if step is None:
+            step = 10
+        idx = self.cmb_player_autonext.findData(step)
+        if idx >= 0:
+            self.cmb_player_autonext.setCurrentIndex(idx)
+        else:
+            self.cmb_player_autonext.setEditText(f"{step}s")
+        self._sync_player_autonext_button()
+        if self._player_autonext_active:
+            self._restart_player_autonext_timer()
+
+    def _sync_player_autonext_button(self):
+        if not hasattr(self, "btn_player_autonext") or self.btn_player_autonext is None:
+            return
+        secs = self._get_player_autonext_seconds()
+        self.btn_player_autonext.blockSignals(True)
+        self.btn_player_autonext.setChecked(self._player_autonext_active)
+        self.btn_player_autonext.setText(f"■ Auto {secs}s" if self._player_autonext_active else f"▶ Auto {secs}s")
+        self.btn_player_autonext.blockSignals(False)
+
+    def _ensure_player_autonext_timer(self):
+        if self._player_autonext_timer is None:
+            self._player_autonext_timer = QTimer(self)
+            self._player_autonext_timer.setSingleShot(True)
+            self._player_autonext_timer.timeout.connect(self._fire_player_autonext)
+        return self._player_autonext_timer
+
+    def _stop_player_autonext(self, notify=False):
+        self._player_autonext_active = False
+        if self._player_autonext_timer is not None:
+            try:
+                self._player_autonext_timer.stop()
+            except Exception:
+                pass
+        self._sync_player_autonext_button()
+        if notify:
+            self._notify("Auto salto desactivado", 1800)
+
+    def _toggle_player_autonext(self, checked=None):
+        if checked is None:
+            checked = not self._player_autonext_active
+        if not checked:
+            self._stop_player_autonext(notify=True)
+            return
+        ruta_actual = Path(self.video_elegido) if self.video_elegido else None
+        if not ruta_actual or not ruta_actual.exists() or ruta_actual.suffix.lower() not in EXTENSIONES_VIDEO:
+            self._stop_player_autonext(notify=False)
+            self._notify("Abre un vídeo para activar el auto salto", 2200)
+            return
+        self._stop_10s_preview()
+        self._player_autonext_active = True
+        self._restart_player_autonext_timer()
+        secs = self._get_player_autonext_seconds()
+        self._notify(f"Auto salto activado: siguiente en {secs}s", 2200)
+
+    def _restart_player_autonext_timer(self):
+        if not self._player_autonext_active:
+            self._sync_player_autonext_button()
+            return
+        ruta_actual = Path(self.video_elegido) if self.video_elegido else None
+        if not ruta_actual or not ruta_actual.exists() or ruta_actual.suffix.lower() not in EXTENSIONES_VIDEO:
+            self._stop_player_autonext(notify=False)
+            return
+        secs = self._get_player_autonext_seconds()
+        timer = self._ensure_player_autonext_timer()
+        timer.stop()
+        timer.start(max(1, secs) * 1000)
+        self._sync_player_autonext_button()
+
+    def _fire_player_autonext(self):
+        if not self._player_autonext_active:
+            return
+        ruta_actual = Path(self.video_elegido) if self.video_elegido else None
+        if not ruta_actual or not ruta_actual.exists() or ruta_actual.suffix.lower() not in EXTENSIONES_VIDEO:
+            self._stop_player_autonext(notify=False)
+            return
+        self.proximo_video()
 
     def _seek_relative_seconds(self, delta_seconds):
         if self.media_player.source().isEmpty():
@@ -9137,6 +9259,7 @@ class VideoBrowserApp(QMainWindow):
             self._notify("Este bloque no tiene vídeos disponibles", 1800)
             return
         self._stop_10s_preview()
+        self._stop_player_autonext(notify=False)
         self._clear_dashboard_block_queue()
         random.shuffle(videos)
         self._preview_10s_queue = list(videos)
@@ -10018,6 +10141,7 @@ class VideoBrowserApp(QMainWindow):
         self.player_thread = _EmbeddedPlaybackState(ruta_str)
         self.media_player.setSource(QUrl.fromLocalFile(ruta_str))
         self.media_player.play()
+        self._restart_player_autonext_timer()
         self._notify(f"Reproduciendo: {self.video_elegido.name}")
         # Hashear en background si aún no tiene hash
         threading.Thread(
