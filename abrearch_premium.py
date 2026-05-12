@@ -4687,7 +4687,7 @@ class VideoBrowserApp(QMainWindow):
         self.cmb_player_autonext = QComboBox()
         self.cmb_player_autonext.setEditable(True)
         self.cmb_player_autonext.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.cmb_player_autonext.setToolTip("Segundos para saltar automáticamente al siguiente vídeo. Mínimo 3s; puedes elegir 10, 20 o escribir X.")
+        self.cmb_player_autonext.setToolTip("Segundos para saltar automáticamente al siguiente vídeo. Puedes elegir un valor o escribir cualquier número.")
         for sec in (3, 10, 20, 30, 60):
             self.cmb_player_autonext.addItem(f"{sec}s", sec)
         if self.cmb_player_autonext.lineEdit() is not None:
@@ -5329,11 +5329,11 @@ class VideoBrowserApp(QMainWindow):
             if hasattr(self, "cmb_player_autonext") and self.cmb_player_autonext is not None:
                 v = self.cmb_player_autonext.currentData()
                 if v is not None:
-                    return max(3, int(v))
+                    return max(1, int(v))
                 txt = self.cmb_player_autonext.currentText()
                 custom_v = self._parse_seek_step_value(txt)
                 if custom_v is not None:
-                    return max(3, custom_v)
+                    return max(1, custom_v)
         except Exception:
             pass
         return 3
@@ -5369,7 +5369,7 @@ class VideoBrowserApp(QMainWindow):
             step = self._parse_seek_step_value(self.cmb_player_autonext.currentText())
         if step is None:
             step = 3
-        step = max(3, step)
+        step = max(1, step)
         idx = self.cmb_player_autonext.findData(step)
         if idx >= 0:
             self.cmb_player_autonext.setCurrentIndex(idx)
