@@ -4667,9 +4667,14 @@ class VideoBrowserApp(QMainWindow):
         self.lbl_seek_step.setObjectName("count")
         player_row.addWidget(self.lbl_seek_step)
         self.cmb_seek_step = QComboBox()
-        self.cmb_seek_step.setToolTip("Segundos que avanzan/retroceden las flechas ← →")
-        for sec in (2, 5, 10, 30):
+        self.cmb_seek_step.setEditable(True)
+        self.cmb_seek_step.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.cmb_seek_step.setToolTip("Segundos que avanzan/retroceden las flechas ← →. Puedes elegir 10, 20 o escribir X.")
+        for sec in (2, 5, 10, 20, 30):
             self.cmb_seek_step.addItem(f"{sec}s", sec)
+        if self.cmb_seek_step.lineEdit() is not None:
+            self.cmb_seek_step.lineEdit().setPlaceholderText("Xs")
+            self.cmb_seek_step.lineEdit().editingFinished.connect(self._normalize_seek_step_combo)
         idx_5 = self.cmb_seek_step.findData(5)
         self.cmb_seek_step.setCurrentIndex(idx_5 if idx_5 >= 0 else 0)
         self.cmb_seek_step.setMinimumWidth(74)
@@ -5287,9 +5292,36 @@ class VideoBrowserApp(QMainWindow):
                 v = self.cmb_seek_step.currentData()
                 if v is not None:
                     return max(1, int(v))
+                txt = self.cmb_seek_step.currentText()
+                custom_v = self._parse_seek_step_value(txt)
+                if custom_v is not None:
+                    return custom_v
         except Exception:
             pass
         return 5
+
+    def _parse_seek_step_value(self, value):
+        text = str(value or "").strip().lower()
+        if not text:
+            return None
+        m = re.search(r"\d+", text)
+        if not m:
+            return None
+        return max(1, int(m.group(0)))
+
+    def _normalize_seek_step_combo(self):
+        if not hasattr(self, "cmb_seek_step") or self.cmb_seek_step is None:
+            return
+        step = self._parse_seek_step_value(self.cmb_seek_step.currentData())
+        if step is None:
+            step = self._parse_seek_step_value(self.cmb_seek_step.currentText())
+        if step is None:
+            step = 5
+        idx = self.cmb_seek_step.findData(step)
+        if idx >= 0:
+            self.cmb_seek_step.setCurrentIndex(idx)
+            return
+        self.cmb_seek_step.setEditText(f"{step}s")
 
     def _seek_relative_seconds(self, delta_seconds):
         if self.media_player.source().isEmpty():
