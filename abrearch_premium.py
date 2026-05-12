@@ -4546,7 +4546,7 @@ class VideoBrowserApp(QMainWindow):
         block5, self.dash_channels_least_list = _mk_dash_block("Bloque 5 · Canales menos vistos (mix)")
         block6, self.dash_discovery_list = _mk_dash_block("Bloque 6 · Videos por descubrir")
         block7, self.dash_short_list = _mk_dash_block("Bloque 7 · Videos cortos  (<1.5 min)")
-        block8, self.dash_top_list = _mk_dash_block("Bloque 8 · Favoritos Top")
+        block8, self.dash_recent_list = _mk_dash_block("Bloque 8 · Recién añadidos")
         block9, self.dash_long_list = _mk_dash_block("Bloque 9 · Maratón largos  (>20 min)")
         block10, self.dash_forgotten_list = _mk_dash_block("Bloque 10 · Para retomar (más antiguos)")
         dash_col.addWidget(block1)
@@ -9617,6 +9617,17 @@ class VideoBrowserApp(QMainWindow):
         seen.sort(key=lambda row: (row[0], row[1].name.lower()))
         return [v for _ts, v in seen[:limit]]
 
+    def _build_recently_added_videos(self, pool: list, limit: int = 18) -> list:
+        """Return newest videos by file modification time."""
+        enriched = []
+        for v in pool:
+            try:
+                enriched.append((float(v.stat().st_mtime), v))
+            except OSError:
+                continue
+        enriched.sort(key=lambda row: row[0], reverse=True)
+        return [v for _mtime, v in enriched[:limit]]
+
     def _refresh_home_dashboard(self):
         if not hasattr(self, "dash_recommended_list"):
             return
@@ -9629,7 +9640,7 @@ class VideoBrowserApp(QMainWindow):
                 self.dash_channels_least_list,
                 self.dash_discovery_list,
                 self.dash_short_list,
-                self.dash_top_list,
+                self.dash_recent_list,
                 self.dash_long_list,
                 self.dash_forgotten_list,
             ):
@@ -9646,7 +9657,7 @@ class VideoBrowserApp(QMainWindow):
                 self.dash_channels_least_list,
                 self.dash_discovery_list,
                 self.dash_short_list,
-                self.dash_top_list,
+                self.dash_recent_list,
                 self.dash_long_list,
                 self.dash_forgotten_list,
             ):
@@ -9723,13 +9734,13 @@ class VideoBrowserApp(QMainWindow):
                 channel_representatives.append(vids[0])
 
         short_videos = self._build_short_videos(pool, stats_map, limit=18)
-        top_favorites = [v for v in recommended_pool if v.name.lower().startswith("top ")][:18]
+        recent_added = self._build_recently_added_videos(pool, limit=18)
         long_videos = self._build_long_videos(pool, stats_map, limit=18)
         forgotten_videos = self._build_forgotten_videos(pool, stats_map, limit=18)
 
         selected = (
             recommended + last_seen + channels_mix + unreviewed + channels_least + discovery
-            + channel_representatives + short_videos + top_favorites + long_videos + forgotten_videos
+            + channel_representatives + short_videos + recent_added + long_videos + forgotten_videos
         )
         want_paths = [str(v) for v in selected]
         thumbs_map = self.db.obtener_miniaturas_batch(want_paths) if want_paths else {}
@@ -9742,7 +9753,7 @@ class VideoBrowserApp(QMainWindow):
         self._populate_dashboard_strip(self.dash_channels_least_list, channels_least, thumbs_map, stats_map_dash, "channels_least")
         self._populate_dashboard_strip(self.dash_discovery_list, discovery, thumbs_map, stats_map_dash, "discovery")
         self._populate_dashboard_strip(self.dash_short_list, short_videos, thumbs_map, stats_map_dash, "short")
-        self._populate_dashboard_strip(self.dash_top_list, top_favorites, thumbs_map, stats_map_dash, "top")
+        self._populate_dashboard_strip(self.dash_recent_list, recent_added, thumbs_map, stats_map_dash, "recent_added")
         self._populate_dashboard_strip(self.dash_long_list, long_videos, thumbs_map, stats_map_dash, "long")
         self._populate_dashboard_strip(self.dash_forgotten_list, forgotten_videos, thumbs_map, stats_map_dash, "forgotten")
 
