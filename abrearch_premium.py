@@ -5444,6 +5444,10 @@ class VideoBrowserApp(QMainWindow):
         if not ruta_actual or not ruta_actual.exists() or ruta_actual.suffix.lower() not in EXTENSIONES_VIDEO:
             self._stop_player_autonext(notify=False)
             return
+        self._pending_random_seek_ratio = random.uniform(0.03, 0.97)
+        self._pending_random_pause = False
+        self._pending_random_seek_tries = 12
+        self._pending_random_seek_scheduled = False
         self.proximo_video()
 
     def _seek_relative_seconds(self, delta_seconds):
