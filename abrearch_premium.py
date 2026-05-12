@@ -788,6 +788,11 @@ class _VideoOnlyFullscreenWindow(QWidget):
         self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_row.addWidget(self.btn_next)
 
+        self.btn_autonext = QPushButton("▶ Auto")
+        self.btn_autonext.setCheckable(True)
+        self.btn_autonext.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_row.addWidget(self.btn_autonext)
+
         btn_row.addStretch(1)
 
         self.btn_fav = QPushButton("★ Favorito")
@@ -835,6 +840,7 @@ class _VideoOnlyFullscreenWindow(QWidget):
             self.btn_prev,
             self.btn_play_pause,
             self.btn_next,
+            self.btn_autonext,
         ):
             w.installEventFilter(self)
 
@@ -5327,13 +5333,13 @@ class VideoBrowserApp(QMainWindow):
     def _get_player_autonext_seconds(self):
         try:
             if hasattr(self, "cmb_player_autonext") and self.cmb_player_autonext is not None:
-                v = self.cmb_player_autonext.currentData()
-                if v is not None:
-                    return min(60, max(1, int(v)))
                 txt = self.cmb_player_autonext.currentText()
                 custom_v = self._parse_seek_step_value(txt)
                 if custom_v is not None:
                     return min(60, max(1, custom_v))
+                v = self.cmb_player_autonext.currentData()
+                if v is not None:
+                    return min(60, max(1, int(v)))
         except Exception:
             pass
         return 3
@@ -5364,9 +5370,9 @@ class VideoBrowserApp(QMainWindow):
     def _on_player_autonext_step_changed(self):
         if not hasattr(self, "cmb_player_autonext") or self.cmb_player_autonext is None:
             return
-        step = self._parse_seek_step_value(self.cmb_player_autonext.currentData())
+        step = self._parse_seek_step_value(self.cmb_player_autonext.currentText())
         if step is None:
-            step = self._parse_seek_step_value(self.cmb_player_autonext.currentText())
+            step = self._parse_seek_step_value(self.cmb_player_autonext.currentData())
         if step is None:
             step = 3
         step = min(60, max(1, step))
@@ -5380,13 +5386,18 @@ class VideoBrowserApp(QMainWindow):
             self._restart_player_autonext_timer()
 
     def _sync_player_autonext_button(self):
-        if not hasattr(self, "btn_player_autonext") or self.btn_player_autonext is None:
-            return
         secs = self._get_player_autonext_seconds()
-        self.btn_player_autonext.blockSignals(True)
-        self.btn_player_autonext.setChecked(self._player_autonext_active)
-        self.btn_player_autonext.setText(f"■ Auto {secs}s" if self._player_autonext_active else f"▶ Auto {secs}s")
-        self.btn_player_autonext.blockSignals(False)
+        if hasattr(self, "btn_player_autonext") and self.btn_player_autonext is not None:
+            self.btn_player_autonext.blockSignals(True)
+            self.btn_player_autonext.setChecked(self._player_autonext_active)
+            self.btn_player_autonext.setText(f"■ Auto {secs}s" if self._player_autonext_active else f"▶ Auto {secs}s")
+            self.btn_player_autonext.blockSignals(False)
+        fsw = getattr(self, "_video_only_fs_window", None)
+        if fsw is not None and hasattr(fsw, "btn_autonext"):
+            fsw.btn_autonext.blockSignals(True)
+            fsw.btn_autonext.setChecked(self._player_autonext_active)
+            fsw.btn_autonext.setText(f"■ Auto {secs}s" if self._player_autonext_active else f"▶ Auto {secs}s")
+            fsw.btn_autonext.blockSignals(False)
 
     def _ensure_player_autonext_timer(self):
         if self._player_autonext_timer is None:
@@ -5631,6 +5642,7 @@ class VideoBrowserApp(QMainWindow):
         fs_window.btn_next.clicked.connect(self.proximo_video)
         fs_window.btn_prev.clicked.connect(self.video_anterior)
         fs_window.btn_play_pause.clicked.connect(self._toggle_pause_resume)
+        fs_window.btn_autonext.clicked.connect(self._toggle_player_autonext)
         # Update play/pause button label when playback state changes
         def _sync_fs_play_pause(state):
             if self._video_only_fs_window is None:
@@ -5664,6 +5676,7 @@ class VideoBrowserApp(QMainWindow):
             f"{self._fmt_ms(self.media_player.position())} / {self._fmt_ms(self.media_player.duration())}"
         )
         self._video_only_fs_window = fs_window
+        self._sync_player_autonext_button()
         try:
             self.media_player.setVideoOutput(fs_window.video_widget)
         except Exception:
