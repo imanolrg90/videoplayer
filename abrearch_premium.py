@@ -10950,12 +10950,6 @@ class VideoBrowserApp(QMainWindow):
         old_path = self.video_elegido
         is_fav = old_path.name.lower().startswith("top ")
 
-        if self.player_thread and self.player_thread.isRunning():
-            self.player_thread.detener_reproductor()
-        self._release_main_video_file_handle()
-        if old_path.suffix.lower() in EXTENSIONES_IMAGEN:
-            self._release_photo_preview_file_handle()
-
         if is_fav:
             new_name = old_path.name[4:]
         else:
@@ -11003,14 +10997,6 @@ class VideoBrowserApp(QMainWindow):
         if QMessageBox.question(self, "Borrar", f"¿Eliminar {self.video_elegido.name}?") == QMessageBox.StandardButton.Yes:
             try:
                 ruta_borrada = self.video_elegido
-                self._cancel_photo_autonext()
-                if self.player_thread and self.player_thread.isRunning():
-                    self.player_thread.detener_reproductor()
-                    self.media_player.stop()
-                    time.sleep(0.3)
-                self._release_main_video_file_handle()
-                if ruta_borrada.suffix.lower() in EXTENSIONES_IMAGEN:
-                    self._release_photo_preview_file_handle()
                 self._queue_delete_retry(ruta_borrada, "deferred_delete")
                 self._notify("Borrado guardado: se aplicará al iniciar o con 'Ejecutar pendientes'", 4000)
             except Exception as e:
