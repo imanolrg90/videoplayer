@@ -10046,8 +10046,8 @@ class VideoBrowserApp(QMainWindow):
                 datos = self.db.obtener_stats_video(ruta_anterior_str)
                 primera = datos['reproducciones'] == 0
                 self.db.registrar_visualizacion(ruta_anterior_str, t_sesion)
-                if not video_anterior.stem.endswith('_rwd'):
-                    self._rename_rwd(video_anterior)
+                if not self._is_video_revisado(video_anterior):
+                    self._queue_rwd_startup_only(video_anterior, "deferred_play_forzado")
                 ruta_final = str(self.video_elegido if self.video_elegido else video_anterior)
                 stats = self.db.obtener_stats_video(ruta_final)
                 self._queue_metadata_sync_path(ruta_final)
@@ -10068,8 +10068,8 @@ class VideoBrowserApp(QMainWindow):
                 datos = self.db.obtener_stats_video(ruta_anterior_str)
                 primera = datos['reproducciones'] == 0
                 self.db.registrar_visualizacion(ruta_anterior_str, t_sesion)
-                if not video_anterior.stem.endswith('_rwd'):
-                    self._rename_rwd(video_anterior)
+                if not self._is_video_revisado(video_anterior):
+                    self._queue_rwd_startup_only(video_anterior, "deferred_play_forzado")
                 ruta_final = str(self.video_elegido if self.video_elegido else video_anterior)
                 stats = self.db.obtener_stats_video(ruta_final)
                 self._queue_metadata_sync_path(ruta_final)
@@ -10243,8 +10243,8 @@ class VideoBrowserApp(QMainWindow):
         datos = self.db.obtener_stats_video(ruta_video_str)
         primera = datos['reproducciones'] == 0
         self.db.registrar_visualizacion(ruta_video_str, t_sesion)
-        if not ruta_reproducida.stem.endswith('_rwd'):
-            self._rename_rwd(ruta_reproducida)
+        if not self._is_video_revisado(ruta_reproducida):
+            self._queue_rwd_startup_only(ruta_reproducida, "deferred_play_end")
         ruta_final = str(self.video_elegido)
         nombre_final = self.video_elegido.name  # capturar antes de que _refresh_list lo anule
         stats = self.db.obtener_stats_video(ruta_final)
