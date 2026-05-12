@@ -10242,6 +10242,9 @@ class VideoBrowserApp(QMainWindow):
         if clicked == btn_delete:
             self._queue_delete_retry(ruta, "cleanup_review")
             self._notify(f"Marcado para borrar: {ruta.name}", 1200)
+        elif not self._is_video_revisado(ruta):
+            self._queue_rwd_startup_only(ruta, "cleanup_review_keep")
+            self._notify(f"Marcado como revisado: {ruta.name}", 1200)
         QTimer.singleShot(0, self._advance_cleanup_review)
 
     def forzar_guardado_tiempo_actual(self):
