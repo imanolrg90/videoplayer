@@ -3705,6 +3705,8 @@ class VideoBrowserApp(QMainWindow):
         self._setup_hover_preview()
         self._load_pending_file_ops()
         self._refresh_pending_ops_badge()
+        # Run deferred startup ops automatically once UI/event loop is ready.
+        QTimer.singleShot(0, lambda: self._run_startup_deferred_renames(trigger="startup"))
         # Mostrar dashboard de inicio nada más arrancar.
         QTimer.singleShot(0, self._go_to_dashboard)
 
