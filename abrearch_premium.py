@@ -7299,11 +7299,18 @@ class VideoBrowserApp(QMainWindow):
             self.idle_hash_count = 0
             self.lbl_ruta.setText(str(self.ruta_raiz))
             self._show_loading(f"Cargando {self.ruta_raiz.name}…")
-            self._scan()
-            self._build_tree()
-            self._refresh_list()
-            self.mostrar_porcentaje_hashes()
-            self._notify(f"Carpeta cargada: {self.ruta_raiz.name}")
+            try:
+                self._scan()
+                self._build_tree()
+                self._refresh_list()
+                self.mostrar_porcentaje_hashes()
+                self._notify(f"Carpeta cargada: {self.ruta_raiz.name}")
+            except Exception as e:
+                LOGGER.exception("Error cargando carpeta raíz: %s", e)
+                QMessageBox.critical(self, "Error", f"No se pudo cargar la carpeta:\n{e}")
+            finally:
+                # Never block the UI behind the loading overlay.
+                self._hide_loading()
 
     def _scan(self):
         if not self.ruta_raiz:
