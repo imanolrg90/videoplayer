@@ -4544,6 +4544,9 @@ class VideoBrowserApp(QMainWindow):
         block5, self.dash_channels_least_list = _mk_dash_block("Bloque 5 · Canales menos vistos (mix)")
         block6, self.dash_discovery_list = _mk_dash_block("Bloque 6 · Videos por descubrir")
         block7, self.dash_short_list = _mk_dash_block("Bloque 7 · Videos cortos  (<1.5 min)")
+        block8, self.dash_top_list = _mk_dash_block("Bloque 8 · Favoritos Top")
+        block9, self.dash_long_list = _mk_dash_block("Bloque 9 · Maratón largos  (>20 min)")
+        block10, self.dash_forgotten_list = _mk_dash_block("Bloque 10 · Para retomar (más antiguos)")
         dash_col.addWidget(block1)
         dash_col.addWidget(block2)
         dash_col.addWidget(block3)
@@ -4551,6 +4554,9 @@ class VideoBrowserApp(QMainWindow):
         dash_col.addWidget(block5)
         dash_col.addWidget(block6)
         dash_col.addWidget(block7)
+        dash_col.addWidget(block8)
+        dash_col.addWidget(block9)
+        dash_col.addWidget(block10)
         dash_col.addStretch()
         self.dashboard_scroll.setWidget(dash_host)
         top_layout.addWidget(self.dashboard_scroll, 1)
@@ -9550,6 +9556,65 @@ class VideoBrowserApp(QMainWindow):
         random.shuffle(out)
         return out
 
+    def _build_long_videos(self, pool: list, stats_map: dict, limit: int = 18) -> list:
+        """Return up to *limit* videos with duration > 20 minutes, shuffled per refresh."""
+        LONG_SECS = 20 * 60
+        MAX_PROBE = 120
+
+        def _cached_secs(ruta_str: str) -> int | None:
+            txt = self.duration_cache.get(ruta_str)
+            if not txt:
+                return None
+            m = re.search(r"^(\d+)m\s+(\d+)s$", str(txt).strip())
+            if m:
+                return int(m.group(1)) * 60 + int(m.group(2))
+            m2 = re.search(r"^(\d+)s$", str(txt).strip())
+            if m2:
+                return int(m2.group(1))
+            return None
+
+        out = []
+        candidates = list(pool)
+        random.shuffle(candidates)
+        probed = 0
+        for v in candidates:
+            ruta_str = str(v)
+            secs = _cached_secs(ruta_str)
+            if secs is None and self.ffprobe_path and probed < MAX_PROBE:
+                try:
+                    cmd = [
+                        self.ffprobe_path,
+                        '-v', 'error',
+                        '-show_entries', 'format=duration',
+                        '-of', 'default=noprint_wrappers=1:nokey=1',
+                        ruta_str,
+                    ]
+                    raw = float(subprocess.check_output(cmd, timeout=3).decode().strip())
+                    secs = max(0, int(raw))
+                    dm, ds = divmod(secs, 60)
+                    self.duration_cache[ruta_str] = f"{dm}m {ds}s"
+                except Exception:
+                    secs = None
+                probed += 1
+            if secs is not None and secs > LONG_SECS:
+                out.append(v)
+            if len(out) >= limit:
+                break
+        random.shuffle(out)
+        return out
+
+    def _build_forgotten_videos(self, pool: list, stats_map: dict, limit: int = 18) -> list:
+        """Return seen videos with the oldest last-play timestamps first."""
+        seen = []
+        for v in pool:
+            st = stats_map.get(str(v).replace('\\', '/'), {})
+            last_play = str(st.get('ultima_reproduccion') or "")
+            views = int(st.get('reproducciones', 0) or 0)
+            if last_play and views > 0:
+                seen.append((last_play, v))
+        seen.sort(key=lambda row: (row[0], row[1].name.lower()))
+        return [v for _ts, v in seen[:limit]]
+
     def _refresh_home_dashboard(self):
         if not hasattr(self, "dash_recommended_list"):
             return
@@ -9562,6 +9627,9 @@ class VideoBrowserApp(QMainWindow):
                 self.dash_channels_least_list,
                 self.dash_discovery_list,
                 self.dash_short_list,
+                self.dash_top_list,
+                self.dash_long_list,
+                self.dash_forgotten_list,
             ):
                 w.clear()
             return
@@ -9576,6 +9644,9 @@ class VideoBrowserApp(QMainWindow):
                 self.dash_channels_least_list,
                 self.dash_discovery_list,
                 self.dash_short_list,
+                self.dash_top_list,
+                self.dash_long_list,
+                self.dash_forgotten_list,
             ):
                 w.clear()
             return
@@ -9650,8 +9721,14 @@ class VideoBrowserApp(QMainWindow):
                 channel_representatives.append(vids[0])
 
         short_videos = self._build_short_videos(pool, stats_map, limit=18)
+        top_favorites = [v for v in recommended_pool if v.name.lower().startswith("top ")][:18]
+        long_videos = self._build_long_videos(pool, stats_map, limit=18)
+        forgotten_videos = self._build_forgotten_videos(pool, stats_map, limit=18)
 
-        selected = recommended + last_seen + channels_mix + unreviewed + channels_least + discovery + channel_representatives + short_videos
+        selected = (
+            recommended + last_seen + channels_mix + unreviewed + channels_least + discovery
+            + channel_representatives + short_videos + top_favorites + long_videos + forgotten_videos
+        )
         want_paths = [str(v) for v in selected]
         thumbs_map = self.db.obtener_miniaturas_batch(want_paths) if want_paths else {}
         self._dashboard_thumb_cache = dict(thumbs_map)
@@ -9663,6 +9740,9 @@ class VideoBrowserApp(QMainWindow):
         self._populate_dashboard_strip(self.dash_channels_least_list, channels_least, thumbs_map, stats_map_dash, "channels_least")
         self._populate_dashboard_strip(self.dash_discovery_list, discovery, thumbs_map, stats_map_dash, "discovery")
         self._populate_dashboard_strip(self.dash_short_list, short_videos, thumbs_map, stats_map_dash, "short")
+        self._populate_dashboard_strip(self.dash_top_list, top_favorites, thumbs_map, stats_map_dash, "top")
+        self._populate_dashboard_strip(self.dash_long_list, long_videos, thumbs_map, stats_map_dash, "long")
+        self._populate_dashboard_strip(self.dash_forgotten_list, forgotten_videos, thumbs_map, stats_map_dash, "forgotten")
 
     def _on_dashboard_item_clicked(self, item: QListWidgetItem):
         if not item:
