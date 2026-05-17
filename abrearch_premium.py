@@ -10568,11 +10568,18 @@ class VideoBrowserApp(QMainWindow):
         self._retry_persisted_rwd_renames_on_startup()
         self._retry_photo_fav_renames_on_startup()
         self._retry_pending_file_ops(trigger=trigger)
-        self._process_pending_metadata_sync_on_startup()
+        # Metadata sync can be slow (file I/O per video); run in a background thread
+        # so the UI is not blocked at startup.
+        t = threading.Thread(
+            target=self._process_pending_metadata_sync_on_startup,
+            name="MetadataSyncStartup",
+            daemon=True,
+        )
+        t.start()
         self._refresh_pending_ops_badge()
         c1 = self._pending_ops_counts()
         LOGGER.info(
-            "Deferred ops end (%s): rwd=%d borrar=%d top=%d meta=%d",
+            "Deferred ops end (%s): rwd=%d borrar=%d top=%d meta=%d (metadata sync in background)",
             trigger,
             c1["rwd"], c1["borrar"], c1["top"], c1["meta"],
         )
@@ -10749,7 +10756,8 @@ class VideoBrowserApp(QMainWindow):
             "Startup deferred metadata summary: applied=%d remaining=%d skipped_missing=%d skipped_non_video=%d",
             done, len(remaining), skipped_missing, skipped_non_video,
         )
-        self._refresh_pending_ops_badge()
+        # _refresh_pending_ops_badge touches Qt widgets; marshal to the main thread.
+        QTimer.singleShot(0, self._refresh_pending_ops_badge)
 
     def _queue_delete_retry(self, ruta: Path, error_msg: str = ""):
         try:
